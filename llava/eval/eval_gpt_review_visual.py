@@ -14,7 +14,7 @@ def get_eval(content: str, max_tokens: int):
     while True:
         try:
             response = openai.ChatCompletion.create(
-                model='gpt-4',
+                model='gpt-3.5-turbo',
                 messages=[{
                     'role': 'system',
                     'content': 'You are a helpful and precise assistant for checking the quality of the answer.'
@@ -102,7 +102,7 @@ if __name__ == '__main__':
             'id': idx+1,
             'question_id': ques['question_id'],
             'answer1_id': ans1.get('answer_id', ans1['question_id']),
-            'answer2_id': ans2.get('answer_id', ans2['answer_id']),
+            'answer2_id': ans2.get('answer_id', ans2['question_id']),
             'category': category})
         idx += 1
         handles.append(get_eval.remote(content, args.max_tokens))

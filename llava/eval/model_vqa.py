@@ -15,6 +15,8 @@ from PIL import Image
 import random
 import math
 
+# FOR DATA AUGMENTATION
+from llava.data.data_util import *
 
 def split_list(lst, n):
     """Split a list into n (roughly) equal-sized chunks"""
@@ -91,7 +93,9 @@ def eval_model(args):
             print('Moving to CUDA...')
             model = model.cuda()
         else:
+            # This is the model being used for experiments
             model = LlavaLlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, use_cache=True).cuda()
+
         image_processor = CLIPImageProcessor.from_pretrained(model.config.mm_vision_tower, torch_dtype=torch.float16)
 
         mm_use_im_start_end = getattr(model.config, "mm_use_im_start_end", False)
@@ -100,6 +104,7 @@ def eval_model(args):
             tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
 
         vision_tower = model.model.vision_tower[0]
+        print(f'Vision tower: {vision_tower}')
         vision_tower.to(device='cuda', dtype=torch.float16)
         vision_config = vision_tower.config
         vision_config.im_patch_token = tokenizer.convert_tokens_to_ids([DEFAULT_IMAGE_PATCH_TOKEN])[0]
@@ -135,13 +140,25 @@ def eval_model(args):
         model.model.vision_tower = [vision_tower]
 
     questions = [json.loads(q) for q in open(os.path.expanduser(args.question_file), "r")]
+    # with open(os.path.expanduser(args.question_file), "r") as f:
+    #     questions = json.load(f)
+
     questions = get_chunk(questions, args.num_chunks, args.chunk_idx)
     answers_file = os.path.expanduser(args.answers_file)
     os.makedirs(os.path.dirname(answers_file), exist_ok=True)
     ans_file = open(answers_file, "w")
+
+    all_conversations = {}
+
+    all_answers = []
+    num_images_not_found = 0
+
+
     for i, line in enumerate(tqdm(questions)):
+        print(line)
         idx = line["question_id"]
         image_file = line["image"]
+        
         qs = line["text"]
         cur_prompt = qs
         if mm_use_im_start_end:
@@ -150,13 +167,47 @@ def eval_model(args):
             qs = qs + '\n' + DEFAULT_IMAGE_PATCH_TOKEN * image_token_len
 
         conv = conv_templates[args.conv_mode].copy()
+
         conv.append_message(conv.roles[0], qs)
+
+        # Add a blank message to the conversation if not using simple mode
+        # Commenting this out so I can append the message to the role later,
+        # without having the blank message in the conversation history
         if args.conv_mode != 'simple':
             conv.append_message(conv.roles[1], "")
+
         prompt = conv.get_prompt()
+
         inputs = tokenizer([prompt])
 
-        image = Image.open(os.path.join(args.image_folder, image_file))
+        # Get the correct image from dataset
+        try:
+            image = Image.open(os.path.join(args.image_folder, 'COCO_train2014_' + image_file))
+        except Exception as e:
+            print(f'Failed to open train image. Error: {e}')
+            try:
+                image = Image.open(os.path.join(args.image_folder, 'COCO_val2014_' + image_file))
+            except Exception as e:
+                print(f'Failed to open validation image. Error: {e}')
+
+
+        # try:
+        #     image = Image.open(os.path.join(args.image_folder, image_file))
+        #     # Continue processing the image...
+        # except Exception as e:
+        #     print(f"Image file not found: {image_file}", flush=True)
+        #     num_images_not_found += 1
+        #     print(f"num Images not found: {num_images_not_found}", flush=True)
+        #     continue
+
+
+        print(f'Number of images not found: {num_images_not_found}', flush=True)
+        # DATA AUGMENTATION
+        # Apply data augmentation to the image if required
+        if args.data_augmentation is not None:
+            image = apply_data_augmentation(image, args.data_augmentation, image_file)
+
+
         image_tensor = image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
 
         input_ids = torch.as_tensor(inputs.input_ids).cuda()
@@ -175,6 +226,7 @@ def eval_model(args):
                 else:
                     outputs = self.tokenizer.batch_decode(output_ids[:, self.start_len:], skip_special_tokens=True)[0]
                     for keyword in self.keywords:
+                        # print(f'Keywords: {self.keywords}')
                         if keyword in outputs:
                             return True
                 return False
@@ -185,21 +237,25 @@ def eval_model(args):
             keywords = [conv.sep2]
         stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
 
+        # print(f"Current model information: {model}", flush=True)
         with torch.inference_mode():
             output_ids = model.generate(
                 input_ids,
                 images=image_tensor.unsqueeze(0).half().cuda(),
                 do_sample=True,
-                temperature=0.7,
-                max_new_tokens=1024,
+                temperature=0.1,
+                max_new_tokens=2048,
                 use_cache=True,
-                stopping_criteria=[stopping_criteria])
+                stopping_criteria=[stopping_criteria]
+                # , max_length=20
+                )
 
         input_token_len = input_ids.shape[1]
         n_diff_input_output = (input_ids != output_ids[:, :input_token_len]).sum().item()
         if n_diff_input_output > 0:
             print(f'[Warning] Sample {i}: {n_diff_input_output} output_ids are not the same as the input_ids')
         outputs = tokenizer.batch_decode(output_ids[:, input_token_len:], skip_special_tokens=True)[0].strip()
+
 
         if args.conv_mode == 'simple':
             while True:
@@ -221,14 +277,74 @@ def eval_model(args):
         else:
             outputs = outputs.strip()
 
+        # Strip the image patch tokens from the message history
+        if args.conv_mode == 'llava_v1':
+            for index, message in enumerate(conv.messages):
+                role, text = message
+                if role == 'USER':  # Only process the user's messages
+                    text = text.split('<im_start>')[0].strip()  # Split on the image tag and keep the question part
+                conv.messages[index][1] = text
+
+        # Append the output to the next prompt
+        # Not using this anymore
+        # if i < len(questions) - 1:  # ensure we're not at the last question
+        #     idx_next_question = questions[i+1]["question_id"]
+        #     if idx == idx_next_question:
+        #         questions[i+1]['text'] = questions[i]['text'] + outputs + ' ' + questions[i+1]['text']
+
+
+        conv.append_message(conv.roles[1], outputs)
+
         ans_id = shortuuid.uuid()
+
+        # Commenting this out temporarily to see if I can save the message history to answer file
+        # This is how they write to the file in the original code
         ans_file.write(json.dumps({"question_id": idx,
                                    "prompt": cur_prompt,
                                    "text": outputs,
-                                   "answer_id": ans_id,
-                                   "model_id": model_name,
-                                   "metadata": {}}) + "\n")
-        ans_file.flush()
+                                #    "answer_id": ans_id,
+                                #    "model_id": model_name,
+                                #    "metadata": {}
+                                   }
+                                   ) + "\n")
+
+        # Create a dictionary with conversation history
+        conversation = [{"from": msg[0], "value": msg[1]} for msg in conv.messages]
+
+        # for msg in conversation:
+        #     print(f"From: {msg['from']}, Value: {msg['value']}", flush=True)
+
+
+
+
+        # prompt = conv.get_prompt()
+
+    #     if idx not in all_conversations:
+    #         all_conversations[idx] = []
+
+    #     # Make sure we don't go out of bounds
+    #     if i < len(questions) - 1:
+    #         # Get the next question id
+    #         idx_next_question = questions[i+1]["question_id"]
+
+    #         # If the index of the current and next question match
+    #         # Append the q/a pair to the current question
+    #         if idx == idx_next_question:
+    #             all_conversations[idx].extend(conversation)
+    #         else:
+    #             all_conversations[idx].append(conversation[-2])
+    #             all_conversations[idx].append(conversation[-1])
+    #             final_dict = {"id": idx, "conversation": all_conversations[idx]}
+
+    #             # Append the conversation to the list
+    #             all_answers.append(final_dict)
+
+    # json.dump(all_answers, ans_file, indent=4)
+
+
+
+
+    # Don't forget to close the file after writing to it
     ans_file.close()
 
 if __name__ == "__main__":
@@ -240,9 +356,10 @@ if __name__ == "__main__":
     parser.add_argument("--answers-file", type=str, default="answer.jsonl")
     parser.add_argument("--mm-projector", type=str, default=None)
     parser.add_argument("--vision-tower", type=str, default=None)
-    parser.add_argument("--conv-mode", type=str, default="simple")
+    parser.add_argument("--conv-mode", type=str, default="llava_v1") # the default is "simple", I changed it to "llava_v1"
     parser.add_argument("--num-chunks", type=int, default=1)
     parser.add_argument("--chunk-idx", type=int, default=0)
+    parser.add_argument("--data-augmentation", type=str, default=None) # Pass in data augmentation arg
     args = parser.parse_args()
 
     eval_model(args)

@@ -305,6 +305,17 @@ simple_conv_multimodal = Conversation(
     sep="###",
 )
 
+conv_classification = Conversation(
+    system= "You are LLaVA, a large language and vision assistant trained by UW Madison WAIV Lab."
+            "You have the ability to analyze and classify images provided by the user."
+            "Once an image is presented, your task is to identify and classify the main object within the image.",
+    roles=("USER", "ASSISTANT"),
+    messages=(),
+    offset=2,
+    sep_style=SeparatorStyle.SINGLE,
+    sep="###",
+)
+
 simple_conv_mpt_multimodal = Conversation(
     system="""<|im_start|>system
 - You are LLaVA, a large language and vision assistant trained by UW Madison WAIV Lab.
@@ -336,6 +347,9 @@ conv_llava_v1 = Conversation(
     system="You are LLaVA, a large language and vision assistant trained by UW Madison WAIV Lab."
            "You are able to understand the visual content that the user provides, and assist the user with a variety of tasks using natural language."
            "Follow the instructions carefully and explain your answers in detail.",
+    # system= "You are LLaVA, a large language and vision assistant trained by UW Madison WAIV Lab."
+    #         "You have the ability to analyze and classify images provided by the user, leveraging a deep understanding of both visual and contextual cues."
+    #         "Once an image is presented, your task is to identify and classify the main objects or themes within the image, and provide a detailed explanation of your analysis.",
     roles=("USER", "ASSISTANT"),
     version="v1",
     messages=(),
@@ -353,6 +367,8 @@ conv_templates = {
     "multimodal": simple_conv_multimodal,
     "mpt_multimodal": simple_conv_mpt_multimodal,
     "llava_v1": conv_llava_v1,
+    "classification": conv_classification,
+    #test
 
     # fastchat
     "v1": conv_v1_2,
