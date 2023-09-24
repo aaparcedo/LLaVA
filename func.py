@@ -170,7 +170,7 @@ def classify_with_descriptors(text_response_embeds, image_embeds, text_label_emb
 
     logits_image = []
     
-    print(f'text_label_embeds shape: {text_label_embeds.shape}', flush=True)
+    print(f'text label embeds: {text_label_embeds}', flush=True)
 
     for label in text_label_embeds:
         label = label / label.norm(p=2, dim=-1, keepdim=True)

@@ -147,7 +147,7 @@ if __name__ == "__main__":
     sys.stdout = open(log_filename, 'w')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", type=str, default="LLAMA-on-LLaVA")
+    parser.add_argument("--model-name", type=str, default="./ckpts/LLAMA-on-LLaVA")
     parser.add_argument("--dataset", type=str, default="imagenet")
     parser.add_argument("--image_size", type=float, default=224)
     parser.add_argument("--set", type=int, default=0)
