@@ -5,6 +5,7 @@ from transformers import CLIPVisionModel
 from llava.conversation import conv_templates, SeparatorStyle
 from llava.model.utils import KeywordsStoppingCriteria
 from nltk.tokenize import sent_tokenize, word_tokenize
+import sys
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 DEFAULT_IMAGE_PATCH_TOKEN = "<im_patch>"
@@ -171,6 +172,8 @@ def classify_with_descriptors(text_response_embeds, image_embeds, text_label_emb
     logits_image = []
     
     print(f'text label embeds: {text_label_embeds}', flush=True)
+    
+    sys.exit()
 
     for label in text_label_embeds:
         label = label / label.norm(p=2, dim=-1, keepdim=True)

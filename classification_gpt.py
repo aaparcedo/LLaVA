@@ -75,6 +75,7 @@ def eval_model(args):
             print(f'sentences: {sentences}', flush=True)
             text_descriptor = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
             print(f'text descriptor shape: {text_descriptor.shape}', flush=True)
+            print(f'text descriptor: {text_descriptor}', flush=True)
             text_descriptor_embeds = text_model(text_descriptor).text_embeds
             print(f'text descriptor embeds shape: {text_descriptor_embeds.shape}', flush=True)
             text_descriptor_embeds = text_descriptor_embeds / text_descriptor_embeds.norm(p=2, dim=-1, keepdim=True)
