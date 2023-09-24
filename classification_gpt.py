@@ -72,19 +72,22 @@ def eval_model(args):
             for example in examples:
                 sentence = f"{label} {make_descriptor_sentence(example)}"
                 sentences.append(sentence)
-            print(f'sentences: {sentences}', flush=True) # tench which is a freshwater fish'... (4 more)
+            # print(f'sentences: {sentences}', flush=True) # tench which is a freshwater fish'... (4 more)
             text_descriptor = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
-            print(f'text descriptor shape: {text_descriptor.shape}', flush=True) # torch.Size([7, 15])
+            # print(f'text descriptor shape: {text_descriptor.shape}', flush=True) # torch.Size([7, 15])
             # print(f'text descriptor: {text_descriptor}', flush=True) # sentence tokens
             text_descriptor_embeds = text_model(text_descriptor).text_embeds
-            print(f'text descriptor embeds shape: {text_descriptor_embeds.shape}', flush=True) # torch.Size([6, 768])
+            # print(f'text descriptor embeds shape: {text_descriptor_embeds.shape}', flush=True) # torch.Size([6, 768])
             text_descriptor_embeds = text_descriptor_embeds / text_descriptor_embeds.norm(p=2, dim=-1, keepdim=True)
             text_label_embeds.append(text_descriptor_embeds)
             
     # print(f'text label embedding len: {len(text_label_embeds)}', flush=True) # 1000
             
-    print(f"label name: {label_names[0]}", flush=True) # 'tench'
-    print(f'descriptor: {descriptors[label_names[0]]}', flush=True) # 'fresh water fish'... (4 more)
+    # print(f"label name: {label_names[0]}", flush=True) # 'tench'
+    # print(f'descriptor: {descriptors[label_names[0]]}', flush=True) # 'fresh water fish'... (4 more)
+    
+    print(f'type text label embeds: {type(text_label_embeds)}', flush=True) 
+    print(f'type text label embeds[0]: {type(text_label_embeds[0])}', flush=True) 
     
     for i, data in enumerate(image_list):
         image_name, label_name = data.split('|')
