@@ -136,6 +136,8 @@ def generate_adversarials_pgd(args):
         text_labels = tokenizer(label_all, padding=True, return_tensors="pt")['input_ids'].cuda()
         text_label_embeds = text_model(text_labels).text_embeds
         text_label_embeds = text_label_embeds / text_label_embeds.norm(p=2, dim=-1, keepdim=True)
+        
+    print(f'text label mebds shape: {text_label_embeds.shape}')
 
     for i, data in tqdm( enumerate(image_list)):
         image_name, label_name = data.split('|')

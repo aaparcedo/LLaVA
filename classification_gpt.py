@@ -86,8 +86,8 @@ def eval_model(args):
     # print(f"label name: {label_names[0]}", flush=True) # 'tench'
     # print(f'descriptor: {descriptors[label_names[0]]}', flush=True) # 'fresh water fish'... (4 more)
     
-    print(f'type text label embeds: {type(text_label_embeds)}', flush=True) 
-    print(f'type text label embeds[0]: {type(text_label_embeds[0])}', flush=True) 
+    # print(f'type text label embeds: {type(text_label_embeds)}', flush=True) # list
+    # print(f'type text label embeds[0]: {type(text_label_embeds[0])}', flush=True) # torch.Tensor
     
     for i, data in enumerate(image_list):
         image_name, label_name = data.split('|')
