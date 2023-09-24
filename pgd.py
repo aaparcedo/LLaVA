@@ -110,7 +110,6 @@ def generate_adversarials_pgd(args):
         for v in label_names:
             label_all.append("a photo of %s"%v)
     
-
     disable_torch_init()
 
     vision_model = transformers.CLIPVisionModelWithProjection.from_pretrained("openai/clip-vit-large-patch14", torch_dtype=torch.float16).cuda()
