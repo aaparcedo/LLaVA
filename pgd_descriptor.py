@@ -48,6 +48,7 @@ def print_clip_top_probs(logits_per_image, classes):
     logits_per_image *= logit_scale
 
     probs = logits_per_image.softmax(dim=0)
+    print(probs)
     top_probs_scaled, top_idxs_scaled = probs[0].topk(5)
 
     if classes != None:
