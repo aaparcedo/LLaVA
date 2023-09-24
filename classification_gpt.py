@@ -81,7 +81,7 @@ def eval_model(args):
             text_descriptor_embeds = text_descriptor_embeds / text_descriptor_embeds.norm(p=2, dim=-1, keepdim=True)
             text_label_embeds.append(text_descriptor_embeds)
             
-    print(f'text label embedding len: {len(text_label_embeds)}', flush=True) # 7
+    print(f'text label embedding len: {len(text_label_embeds)}', flush=True) 
             
     print(f"label name: {label_names[0]}", flush=True)
     print(f'descriptor: {descriptors[label]}', flush=True)
