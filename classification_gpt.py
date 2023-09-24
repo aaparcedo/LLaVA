@@ -72,11 +72,16 @@ def eval_model(args):
             for example in examples:
                 sentence = f"{label} {make_descriptor_sentence(example)}"
                 sentences.append(sentence)
-
+            print(f'sentences: {sentences}', flush=True)
             text_descriptor = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
+            print(f'text descriptor shape: {text_descriptor.shape}', flush=True)
             text_descriptor_embeds = text_model(text_descriptor).text_embeds
+            print(f'text descriptor embeds shape: {text_descriptor_embeds.shape}', flush=True)
             text_descriptor_embeds = text_descriptor_embeds / text_descriptor_embeds.norm(p=2, dim=-1, keepdim=True)
             text_label_embeds.append(text_descriptor_embeds)
+            
+    print(f"label name: {label_names[0]}", flush=True)
+    print(f'descriptor: {descriptors[label]}', flush=True)
     
     for i, data in enumerate(image_list):
         image_name, label_name = data.split('|')
@@ -105,29 +110,14 @@ def eval_model(args):
                 adv_image_path = image_name.replace("/imagenet/", "/imagenet/pgd/descriptors_test/").replace('JPEG', 'pt')
                 adv_image = torch.load(adv_image_path).cuda()
 
-                 ## Adv LLaVA text embedding
+                 ## Adv LLaVA text embedding and cls token
                 adv_response, adv_image_cls_token  = run_LLaVA(args, llava_model, llava_tokenizer, adv_image)
 
                 adv_image_embeds = vision_model.visual_projection(adv_image_cls_token)
-                # adv_image_embeds = adv_image_embeds / adv_image_embeds.norm(p=2, dim=-1, keepdim=True)
                 adv_text_response = tokenizer(adv_response, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
                 adv_text_response_embeds = text_model(adv_text_response).text_embeds
-                # adv_text_response_embeds = adv_text_response_embeds / adv_text_response_embeds.norm(p=2, dim=-1, keepdim=True)
 
                 adv_logits_per_image, adv_logits_per_text = classify_with_descriptors(adv_text_response_embeds, adv_image_embeds, text_label_embeds, temp=args.temp, scale=args.adv_scale)            
-
-                # adv_attention_scores = torch.nn.functional.softmax(torch.mm(adv_image_embeds, adv_text_response_embeds.t()) / args.temp, dim=1)
-                # adv_weighted_sum = torch.mm(adv_attention_scores, adv_text_response_embeds)
-
-                # adv_combined_embeds = adv_weighted_sum
-                # adv_combined_embeds = adv_image_embeds * (1.0-args.adv_scale) + adv_weighted_sum * args.adv_scale
-                # adv_combined_embeds = adv_combined_embeds / adv_combined_embeds.norm(p=2, dim=-1, keepdim=True)
-
-                ## zero-shot result with adv image
-                # adv_logits_per_image = torch.matmul(adv_image_embeds, text_label_embeds.t())
-
-                ## zero-shot result with adv llava response
-                # adv_logits_per_text = torch.matmul(adv_combined_embeds, text_label_embeds.t()).mean(dim=0)
 
                 if adv_logits_per_image.argmax(dim=-1).item()==label:
                     adv_num_image_correct += 1
