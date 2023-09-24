@@ -19,6 +19,7 @@ import argparse
 from llava.utils import disable_torch_init
 from llava.model import *
 import torchvision.transforms as transforms
+from func import *
 
 mean = np.array([0.48145466, 0.4578275, 0.40821073]).reshape((1,3,1,1))
 std = np.array([0.26862954, 0.26130258, 0.27577711]).reshape((1,3,1,1))
@@ -132,12 +133,23 @@ def generate_adversarials_pgd(args):
     image_list = image_list[args.set*args.set_num:(args.set+1)*args.set_num]
 
     with torch.no_grad():
-        text_labels = tokenizer(label_all, padding=True, return_tensors="pt")['input_ids'].cuda()
-        text_label_embeds = text_model(text_labels).text_embeds
-        text_label_embeds = text_label_embeds / text_label_embeds.norm(p=2, dim=-1, keepdim=True)
-        
-    print(f'text label mebds shape: {text_label_embeds.shape}')
+        text_label_embeds = []
 
+        for label in label_names:
+            examples = descriptors[label]
+            sentences = []
+            for example in examples:
+                sentence = f"{label} {make_descriptor_sentence(example)}"
+                sentences.append(sentence)
+            text_descriptor = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
+            text_descriptor_embeds = text_model(text_descriptor).text_embeds
+            text_descriptor_embeds = text_descriptor_embeds / text_descriptor_embeds.norm(p=2, dim=-1, keepdim=True)
+            text_label_embeds.append(text_descriptor_embeds)
+            
+    text_label_embeds = torch.stack(text_label_embeds)
+    
+    print(f'text label embeds shape: {text_label_embeds.shape}')
+            
     for i, data in tqdm( enumerate(image_list)):
         image_name, label_name = data.split('|')
         base_name = os.path.basename(image_name)
@@ -146,7 +158,7 @@ def generate_adversarials_pgd(args):
 
         ## Text label embedding
         label_name = label_name.split('\n')[0]
-        label_name = "a photo of " + label_name
+        label = label_names.index(label_name)
 
         # Uncomment to look at CLIP similaritiy probabilities PRE-attack
         print('\nProbabilities pre-attack:')
