@@ -55,7 +55,7 @@ def print_clip_top_probs(logits_per_image, classes):
             print(f"{classes[top_idxs_scaled[i]]}: {top_probs_scaled[i].item() * 100:.2f}%")   
 
 
-def clip_model_fn(x, text_embeddings, vision_model, classes=None):
+def clip_model_fn(x, text_label_embeds, vision_model, classes=None):
     """
     Compute CLIP similarity scores between an image and a set of text embeddings.
     :param x: Image tensor.
@@ -65,21 +65,28 @@ def clip_model_fn(x, text_embeddings, vision_model, classes=None):
 
     vision_model = vision_model
     image_embeds = vision_model(x).image_embeds
-    logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
+    # logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
     # logits_per_image = torch.matmul(image_embeds, text_embeddings.t()) * logit_scale
+
+    for label in text_label_embeds:
+        label = label / label.norm(p=2, dim=-1, keepdim=True)
+        logit = torch.mm(image_embeds, label.t()).mean(-1)
+        logits_per_image.append(logit.squeeze())
+
+    logits_per_image = torch.stack(logits_per_image)
 
     print_clip_top_probs(logits_per_image, classes)
 
     return logits_per_image
 
 # Generate PGD adversary for image
-def generate_adversary(text_embeddings, image, vision_model, target_label):
+def generate_adversary(text_label_embeds, image, vision_model, target_label):
     """
     Generate an adversarial example for the provided image using the PGD attack.
     """
     # Carry out the PGD attack
     adv_image = projected_gradient_descent(
-        model_fn=lambda x: clip_model_fn(x, text_embeddings, vision_model, classes=None), 
+        model_fn=lambda x: clip_model_fn(x, text_label_embeds, vision_model, classes=None), 
         x=image,
         eps=0.3,   # You can adjust epsilon as needed
         eps_iter=0.01,   # You can adjust eps_iter as needed
@@ -146,7 +153,7 @@ def generate_adversarials_pgd(args):
             text_descriptor_embeds = text_descriptor_embeds / text_descriptor_embeds.norm(p=2, dim=-1, keepdim=True)
             text_label_embeds.append(text_descriptor_embeds)
             
-    text_label_embeds = torch.stack(text_label_embeds)
+    # text_label_embeds = torch.stack(text_label_embeds) # stack is not an option because some labels have different num of descriptors
     
     print(f'text label embeds shape: {text_label_embeds.shape}')
             
