@@ -47,7 +47,7 @@ def print_clip_top_probs(logits_per_image, classes):
 
     logits_per_image *= logit_scale
 
-    probs = logits_per_image.softmax(dim=1)
+    probs = logits_per_image.softmax(dim=0)
     top_probs_scaled, top_idxs_scaled = probs[0].topk(5)
 
     if classes != None:
@@ -76,6 +76,9 @@ def clip_model_fn(x, text_label_embeds, vision_model, classes=None):
         logits_per_image.append(logit.squeeze())
 
     logits_per_image = torch.stack(logits_per_image)
+    
+    print(f'logits per image shape: {logits_per_image.shape}')
+    print(f'logits per image: {logits_per_image}')
 
     print_clip_top_probs(logits_per_image, classes)
 
