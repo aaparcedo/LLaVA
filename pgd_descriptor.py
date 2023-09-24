@@ -68,6 +68,8 @@ def clip_model_fn(x, text_label_embeds, vision_model, classes=None):
     # logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
     # logits_per_image = torch.matmul(image_embeds, text_embeddings.t()) * logit_scale
 
+    logits_per_image = []
+
     for label in text_label_embeds:
         label = label / label.norm(p=2, dim=-1, keepdim=True)
         logit = torch.mm(image_embeds, label.t()).mean(-1)
