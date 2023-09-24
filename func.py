@@ -170,11 +170,7 @@ def classify_with_descriptors(text_response_embeds, image_embeds, text_label_emb
     ## zero-shot result with image
 
     logits_image = []
-    
-    print(f'text label embeds: {text_label_embeds}', flush=True)
-    
-    sys.exit()
-
+        
     for label in text_label_embeds:
         label = label / label.norm(p=2, dim=-1, keepdim=True)
         logit = torch.mm(image_embeds, label.t()).mean(-1)
