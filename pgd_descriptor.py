@@ -93,6 +93,9 @@ def generate_adversary(text_embeddings, image, vision_model, target_label):
 # Generate many adversarial examples using PGD attack
 def generate_adversarials_pgd(args):
 
+    descriptor_list = f'descriptors/descriptors_{args.dataset}.json'
+
+
     label_all = []
 
     f = open(args.image_list, 'r')
@@ -100,12 +103,10 @@ def generate_adversarials_pgd(args):
     f.close()
 
     if args.descriptors:
-        descriptor_file_path = 'descriptors/descriptors_imagenet.json'
-        
-        with open(descriptor_file_path, 'r') as f:
-            descriptors = json.load(f)
-            
-        label_all = [' '.join(value) for value in descriptors.values()]
+        f = open(descriptor_list, 'r')
+        descriptors = json.load(f)
+        label_names = list(descriptors.keys())
+        f.close()
     else: 
         f = open(args.label_list, 'r')
         label_names = list(json.load(f).keys())
