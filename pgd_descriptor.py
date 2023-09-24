@@ -95,7 +95,6 @@ def generate_adversarials_pgd(args):
 
     descriptor_list = f'descriptors/descriptors_{args.dataset}.json'
 
-
     label_all = []
 
     f = open(args.image_list, 'r')
@@ -594,3 +593,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     generate_adversarials_pgd(args)
+    
+"""
+python pgd_descriptor.py --set 0 --set_num 625 --descriptors True
+"""
