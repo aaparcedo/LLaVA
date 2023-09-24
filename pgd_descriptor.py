@@ -154,9 +154,7 @@ def generate_adversarials_pgd(args):
             text_label_embeds.append(text_descriptor_embeds)
             
     # text_label_embeds = torch.stack(text_label_embeds) # stack is not an option because some labels have different num of descriptors
-    
-    print(f'text label embeds shape: {text_label_embeds.shape}')
-            
+                
     for i, data in tqdm( enumerate(image_list)):
         image_name, label_name = data.split('|')
         base_name = os.path.basename(image_name)
