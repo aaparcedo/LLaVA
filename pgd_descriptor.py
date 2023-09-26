@@ -141,7 +141,8 @@ def generate_adversarials_pgd(args):
     vision_model.eval()
     text_model.eval()
 
-    image_list = image_list[args.set*args.set_num:(args.set+1)*args.set_num]
+    # To separate adversarial examples into sets
+    # image_list = image_list[args.set*args.set_num:(args.set+1)*args.set_num]
 
     descriptor_sentences = []
     with torch.no_grad():
