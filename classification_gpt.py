@@ -59,9 +59,10 @@ def eval_model(args):
     adv_num_image_correct = 0
     adv_num_combined_correct = 0
 
-    set_num = len(image_list) // 8
+    # set_num = len(image_list) // 8
+    set_num = args.set_num
+    # image_list = image_list[args.set*set_num:(args.set+1)*set_num]
 
-    image_list = image_list[args.set*set_num:(args.set+1)*set_num]
 
     with torch.no_grad():
         text_label_embeds = []
@@ -157,6 +158,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="imagenet")
     parser.add_argument("--image_size", type=float, default=224)
     parser.add_argument("--set", type=int, default=0)
+    parser.add_argument("--set_num", type=int, default=6250)
     parser.add_argument("--llava_temp", type=float, default=0.8)
     parser.add_argument("--temp", type=float, default=1.0)
     parser.add_argument("--adv_scale", type=float, default=0.95)
