@@ -51,6 +51,8 @@ def print_clip_top_probs(logits_per_image, classes):
     print(probs)
     # top_probs_scaled, top_idxs_scaled = probs[0].topk(5)
     top_probs_scaled, top_idxs_scaled = probs.topk(5)
+    
+    print(f'top_probs_scaled: {top_probs_scaled}', flush=True)
 
 
     if classes != None:
@@ -170,22 +172,23 @@ def generate_adversarials_pgd(args):
         image = test_transform(image).cuda().half().unsqueeze(0)
 
         ## Text label embedding
-        label_name = label_name.split('\n')[0]
-        label = label_names.index(label_name)
+        # label_name = label_name.split('\n')[0]
+        # label = label_names.index(label_name)
 
         # Uncomment to look at CLIP similaritiy probabilities PRE-attack
         print('\nProbabilities pre-attack:')
         logits_per_image = clip_model_fn(image, text_label_embeds, vision_model, label_all)
 
         # Get a new label for our targeted attack (used in pgd function call)
-        target_label = get_different_class(label_name, label_all)
-        print(f'old label: {label_name}, target_label: {target_label}')
+        # target_label = get_different_class(label_name, label_all)
+        # print(f'old label: {label_name}, target_label: {target_label}')
 
         # Generate adversarials
         adv_image = generate_adversary( text_embeddings=text_label_embeds,
                                         image=image,
                                         vision_model=vision_model,
-                                        target_label=target_label)
+                                        # target_label=target_label
+                                        )
         
 
         denormalized_tensor = denormalize(adv_image)
