@@ -168,7 +168,7 @@ def generate_adversarials_pgd(args):
     for i, data in tqdm( enumerate(image_list)):
         image_name, label_name = data.split('|')
         base_name = os.path.basename(image_name)
-        image = Image.open(image_name).convert('RGB')
+        image = Image.open(image_name.replace('/imagenet/', 'imagenet/val')).convert('RGB')
         image = test_transform(image).cuda().half().unsqueeze(0)
 
         ## Text label embedding
