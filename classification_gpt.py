@@ -150,7 +150,9 @@ if __name__ == "__main__":
     arg_index_scale = sys.argv.index('--scale') + 1 if '--scale' in sys.argv else None
     scale_value = sys.argv[arg_index_scale] if arg_index_scale else "0.1"
 
-    log_filename = f"test_logs/gpt_{dataset_value}_{scale_value}_{set_value}.log"
+    # log_filename = f"test_logs/gpt_{dataset_value}_{scale_value}_{set_value}.log"
+    log_filename = f"test_logs/gpt_adv_{dataset_value}_{scale_value}_{set_value}.log"
+
     sys.stdout = open(log_filename, 'w')
 
     parser = argparse.ArgumentParser()
