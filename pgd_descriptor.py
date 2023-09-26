@@ -183,7 +183,7 @@ def generate_adversarials_pgd(args):
         # print(f'old label: {label_name}, target_label: {target_label}')
 
         # Generate adversarials
-        adv_image = generate_adversary( text_embeddings=text_label_embeds,
+        adv_image = generate_adversary( text_label_embeds=text_label_embeds,
                                         image=image,
                                         vision_model=vision_model,
                                         # target_label=target_label
