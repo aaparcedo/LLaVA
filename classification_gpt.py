@@ -92,7 +92,7 @@ def eval_model(args):
     
     for i, data in enumerate(image_list):
         image_name, label_name = data.split('|')
-        image = Image.open(image_name).convert('RGB')
+        image = Image.open(image_name.replace('/imagenet/', '/imagenet/val/')).convert('RGB')
         image = test_transform(image).cuda().half().unsqueeze(0)
 
         label_name = label_name.split('\n')[0]
