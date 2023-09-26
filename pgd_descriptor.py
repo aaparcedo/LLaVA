@@ -48,11 +48,8 @@ def print_clip_top_probs(logits_per_image, classes):
     logits_per_image *= logit_scale
 
     probs = logits_per_image.softmax(dim=0)
-    print(probs)
     # top_probs_scaled, top_idxs_scaled = probs[0].topk(5)
     top_probs_scaled, top_idxs_scaled = probs.topk(5)
-    
-    print(f'top_probs_scaled: {top_probs_scaled}', flush=True)
 
 
     if classes != None:
@@ -81,16 +78,13 @@ def clip_model_fn(x, text_label_embeds, vision_model, classes=None):
         logits_per_image.append(logit.squeeze())
 
     logits_per_image = torch.stack(logits_per_image)
-    
-    print(f'logits per image shape: {logits_per_image.shape}')
-    print(f'logits per image: {logits_per_image}')
 
     print_clip_top_probs(logits_per_image, classes)
 
     return logits_per_image
 
 # Generate PGD adversary for image
-def generate_adversary(text_label_embeds, image, vision_model, target_label):
+def generate_adversary(text_label_embeds, image, vision_model):
     """
     Generate an adversarial example for the provided image using the PGD attack.
     """
@@ -148,21 +142,25 @@ def generate_adversarials_pgd(args):
     text_model.eval()
 
     image_list = image_list[args.set*args.set_num:(args.set+1)*args.set_num]
-    
-    sentences = []
 
+    descriptor_sentences = []
     with torch.no_grad():
         text_label_embeds = []
 
         for label in label_names:
             examples = descriptors[label]
+            sentences = []
             for example in examples:
                 sentence = f"{label} {make_descriptor_sentence(example)}"
                 sentences.append(sentence)
+                
+            descriptor_sentences.append(sentences)
             text_descriptor = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
             text_descriptor_embeds = text_model(text_descriptor).text_embeds
             text_descriptor_embeds = text_descriptor_embeds / text_descriptor_embeds.norm(p=2, dim=-1, keepdim=True)
             text_label_embeds.append(text_descriptor_embeds)
+            
+    print(f'descriptor sentence 0: {descriptor_sentences[0]}')
             
     # text_label_embeds = torch.stack(text_label_embeds) # stack is not an option because some labels have different num of descriptors
                 
@@ -178,14 +176,14 @@ def generate_adversarials_pgd(args):
 
         # Uncomment to look at CLIP similaritiy probabilities PRE-attack
         print('\nProbabilities pre-attack:')
-        logits_per_image = clip_model_fn(image, text_label_embeds, vision_model, sentences)
+        logits_per_image = clip_model_fn(image, text_label_embeds, vision_model, label_all)
 
         # Get a new label for our targeted attack (used in pgd function call)
         # target_label = get_different_class(label_name, label_all)
         # print(f'old label: {label_name}, target_label: {target_label}')
 
         # Generate adversarials
-        adv_image = generate_adversary( text_label_embeds=text_label_embeds,
+        adv_image = generate_adversary( text_embeddings=text_label_embeds,
                                         image=image,
                                         vision_model=vision_model,
                                         # target_label=target_label
@@ -196,7 +194,7 @@ def generate_adversarials_pgd(args):
 
         # Uncomment to look at CLIP similaritiy probabilities POST-attack
         print("Probabilities post-attack")
-        logits_per_image = clip_model_fn(denormalized_tensor, text_label_embeds, vision_model, sentences)
+        logits_per_image = clip_model_fn(denormalized_tensor, text_label_embeds, vision_model, label_all)
 
         if args.save_image: 
             save_image = denormalized_tensor.squeeze(0)
