@@ -269,7 +269,7 @@ def get_or_guess_labels(model, x, **kwargs):
     elif "y_target" in kwargs and kwargs["y_target"] is not None:
         labels = kwargs["y_target"]
     else:
-        _, labels = torch.max(model(x), 1)
+        _, labels = torch.max(model(x), 0)
     return labels
 
 # Taken from cleverhans library
@@ -422,7 +422,7 @@ def fast_gradient_method(
     x = x.clone().detach().to(torch.float16).requires_grad_(True)
     if y is None:
         # Using model predictions as ground truth to avoid label leaking
-        _, y = torch.max(model_fn(x), 1)
+        _, y = torch.max(model_fn(x), 0)
 
     # Compute loss
     loss_fn = torch.nn.CrossEntropyLoss()
@@ -562,7 +562,7 @@ def projected_gradient_descent(
 
     if y is None:
         # Using model predictions as ground truth to avoid label leaking
-        _, y = torch.max(model_fn(x), 1)
+        _, y = torch.max(model_fn(x), 0)
 
     i = 0
     while i < nb_iter:
