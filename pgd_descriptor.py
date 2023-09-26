@@ -616,7 +616,7 @@ def boolean_string(s):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument("--image_name", type=str, default="zebra.jpeg")
-    parser.add_argument("--image_list", type=str, default="./coco_test.txt")
+    parser.add_argument("--image_list", type=str, default="./imagenet_test.txt.txt")
     parser.add_argument("--label_list", type=str, default="./coco_label.json")
     parser.add_argument("--attack_type", type=str, default="pgd")
     parser.add_argument("--set", type=int, required=True)
@@ -629,5 +629,5 @@ if __name__ == "__main__":
     generate_adversarials_pgd(args)
     
 """
-python pgd_descriptor.py --set 0 --set_num 625 --descriptors True
+python pgd_descriptor.py --set 0 --set_num 50000 --descriptors True
 """
