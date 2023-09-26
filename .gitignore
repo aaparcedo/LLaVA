@@ -24,4 +24,4 @@ output
 checkpoints
 ckpts*
 
-.jpg
+*.jpg
