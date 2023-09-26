@@ -113,7 +113,7 @@ def eval_model(args):
                 num_combined_correct += 1
 
             if args.adv:
-                adv_image_path = image_name.replace("/imagenet/", "/imagenet/pgd/descriptors_test/").replace('JPEG', 'pt')
+                adv_image_path = image_name.replace("/imagenet/", "/imagenet/pgd/descriptors/").replace('JPEG', 'pt')
                 adv_image = torch.load(adv_image_path).cuda()
 
                  ## Adv LLaVA text embedding and cls token
