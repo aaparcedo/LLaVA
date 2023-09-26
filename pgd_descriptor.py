@@ -199,12 +199,18 @@ def generate_adversarials_pgd(args):
         if args.save_image: 
             save_image = denormalized_tensor.squeeze(0)
             save_image = T.ToPILImage()(save_image)
-            os.makedirs(f"/home/crcvreu.student2/imagenet/pgd/descriptors_test_rgb", exist_ok=True)
-            save_image.save(f'/home/crcvreu.student2/imagenet/pgd/descriptors_test_rgb/{base_name}')
+            # os.makedirs(f"/home/crcvreu.student2/imagenet/pgd/descriptors_test_rgb", exist_ok=True)
+            os.makedirs(f"/home/crcvreu.student2/imagenet/pgd/descriptors_rgb", exist_ok=True)
+
+            # save_image.save(f'/home/crcvreu.student2/imagenet/pgd/descriptors_test_rgb/{base_name}')
+            save_image.save(f'/home/crcvreu.student2/imagenet/pgd/descriptors_rgb/{base_name}')
+
             # save_image.save(f'/home/crcvreu.student2/coco/test/{base_name}')
 
         # tmp = image_name.split(os.sep)
-        new_dir = "/home/crcvreu.student2/imagenet/pgd/descriptors_test/"
+        # new_dir = "/home/crcvreu.student2/imagenet/pgd/descriptors_test/"
+        new_dir = "/home/crcvreu.student2/imagenet/pgd/descriptors/"
+
         os.makedirs(new_dir, exist_ok=True) # pgd should give same results as pgd_denorm
         # tmp[tmp.index('trainval2014')] = 'descriptors_test'
         # tmp[tmp.index('trainval2014')] = 'test'
