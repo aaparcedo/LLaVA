@@ -176,7 +176,7 @@ def generate_adversarials_pgd(args):
 
         # Uncomment to look at CLIP similaritiy probabilities PRE-attack
         print('\nProbabilities pre-attack:')
-        logits_per_image = clip_model_fn(image, text_label_embeds, vision_model, label_all)
+        logits_per_image = clip_model_fn(image, text_label_embeds, vision_model, descriptor_sentences)
 
         # Get a new label for our targeted attack (used in pgd function call)
         # target_label = get_different_class(label_name, label_all)
@@ -194,7 +194,7 @@ def generate_adversarials_pgd(args):
 
         # Uncomment to look at CLIP similaritiy probabilities POST-attack
         print("Probabilities post-attack")
-        logits_per_image = clip_model_fn(denormalized_tensor, text_label_embeds, vision_model, label_all)
+        logits_per_image = clip_model_fn(denormalized_tensor, text_label_embeds, vision_model, descriptor_sentences)
 
         if args.save_image: 
             save_image = denormalized_tensor.squeeze(0)
