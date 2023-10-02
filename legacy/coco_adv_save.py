@@ -35,6 +35,10 @@ def get_different_class(c_true, classes):
     return np.random.choice(classes_kept)
 
 def adv_sample_generation(vision_model, image, text_embeds, adv_label, temp=0.05, LR = 0.5, steps=50):
+
+    """
+        Young's implementation of PGD
+    """
     
     for step in range(steps):
         image.requires_grad = True

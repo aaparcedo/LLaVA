@@ -13,6 +13,11 @@ from func import *
 
 import torchvision.transforms as transforms
 
+
+"""
+Descriptors attack
+"""
+
 def eval_model(args):
     
     ## datasets

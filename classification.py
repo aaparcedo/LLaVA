@@ -16,6 +16,10 @@ import torchvision.transforms as transforms
 
 from tqdm import tqdm
 
+"""
+Vanilla
+"""
+
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 DEFAULT_IMAGE_PATCH_TOKEN = "<im_patch>"
