@@ -1,23 +1,6 @@
 import torch
 import numpy as np
 
-def clip_model_fn(x, text_embeddings, vision_model, classes=None):
-    """
-    Compute CLIP similarity scores between an image and a set of text embeddings.
-    :param x: Image tensor.
-    :param text_embeddings: Precomputed text embeddings for all labels.
-    :return: Similarity scores between the image and all text labels.
-    """
-
-    image_embeds = vision_model(x).image_embeds
-    logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
-    # logits_per_image = torch.matmul(image_embeds, text_embeddings.t()) * logit_scale
-
-    print_clip_top_probs(logits_per_image, classes)
-
-    return logits_per_image
-
-
 def print_clip_top_probs(logits_per_image, classes):
     """
     Print the top 5 class probabilities for a given image based on its logits.

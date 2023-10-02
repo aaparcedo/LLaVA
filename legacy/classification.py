@@ -226,7 +226,11 @@ def eval_model(args):
 
             combined_embeds = image_embeds * (1.0-args.scale) + weighted_sum * args.scale
             combined_embeds = combined_embeds / combined_embeds.norm(p=2, dim=-1, keepdim=True)
+            # text_label_embeds: (N_labels, 768)
+            # image_embeds: (1, 768)
+            # text_response_embeds: (1, 768)
 
+            
             ## zero-shot result with image
             logits_per_image = torch.matmul(image_embeds, text_label_embeds.t())
 

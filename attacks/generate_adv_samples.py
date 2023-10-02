@@ -7,10 +7,12 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 import argparse
+from ..func import compute_img_text_logits, make_descriptor_sentence
 from llava.utils import disable_torch_init
 from llava.model import *
 import torchvision.transforms as transforms
 from .helpers import * 
+import torch.nn.functional as F
 from .pgd import projected_gradient_descent
 from .sparse_l1 import sparse_l1_descent
 from .cw import carlini_wagner_l2
@@ -23,6 +25,7 @@ def generate_one_adv_sample(image,
                             attack_name, 
                             text_label_embeds, 
                             vision_model, 
+                            use_descriptors=False,
                             save_image=True, 
                             image_name=None, 
                             lr=0.01,
@@ -33,7 +36,7 @@ def generate_one_adv_sample(image,
         raise ValueError('If save_image is True, image_name must be provided.')
     attack = eval(attack_name)
     adv_image = attack(
-        model_fn=lambda x: clip_model_fn(x, text_label_embeds, vision_model, classes=None), 
+        model_fn=lambda x: compute_img_text_logits(x, text_label_embeds, vision_model, use_descriptors=use_descriptors), 
         x=image,
         lr=lr,
         nb_iter=nb_iter,
@@ -50,24 +53,39 @@ def generate_one_adv_sample(image,
 
 def generate_adversarials_pgd(args):
 
+    if args.dataset == 'coco':
+        image_list = './coco_test.txt'
+        label_list = './coco_test.json'
+        descriptor_list = './descriptors/descriptors_coco.json'
+        # args.subset = 50
+    
+    elif args.dataset == 'imagenet':
+        image_list = './imagenet_test.txt'
+        label_list = './imagenet_label.json'
+        descriptor_list = './descriptors/descriptors_imagenet.json'
+        # args.subset = 5000
+    
+    else:
+        raise NotImplementedError(f"Dataset {args.dataset} not implemented")
+
     label_all = []
 
-    f = open(args.image_list, 'r')
-    image_list = f.readlines()
-    f.close()
+    if args.use_descriptors:
+        with open(descriptor_list, 'r') as f:
+            descriptors = json.load(f)
+            label_names = list(descriptors.keys())
+    else:
+        # ==> Sam: label_list format incorrect, a hot fix
+        label_names = set()
+        for line in image_list:
+            label = line.split('|')[-1].split('\n')[0]
+            label_names.add(label)
+        label_names = list(label_names)
+        # ==> end of hot fix
 
-    if args.descriptors:
-        descriptor_list = f'descriptors/descriptors_{args.dataset}.json'
-        f = open(args.descriptor_list, 'r')
-        descriptor_list = list(json.load(f).keys())
-        f.close()
-        label_all = descriptor_list
-    else: 
-        f = open(args.label_list, 'r')
-        label_names = list(json.load(f).keys())
-        f.close()
-        for v in label_names:
-            label_all.append("a photo of %s"%v)
+        # f = open(label_list, 'r')
+        # label_names = list(json.load(f).keys())
+        # f.close()
     
 
     disable_torch_init()
@@ -85,9 +103,23 @@ def generate_adversarials_pgd(args):
     vision_model.eval()
     text_model.eval()
 
-    with torch.no_grad():
-        text_labels = tokenizer(label_all, padding=True, return_tensors="pt")['input_ids'].cuda()
-        text_label_embeds = text_model(text_labels).text_embeds
+    if args.use_descriptors:
+        text_label_embeds = []
+
+        for label in label_names:
+            examples = descriptors[label]
+            sentences = []
+            for example in examples:
+                sentence = f"{label} {make_descriptor_sentence(example)}"
+                sentences.append(sentence)
+                
+            text_descriptor = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
+            text_descriptor_embeds = F.normalize(text_model(text_descriptor).text_embeds, p=2., dim=-1) # (B, N_descriptions, 768)
+            text_label_embeds.append(text_descriptor_embeds) # list of (B, N_descriptions, 768) len = # N_labels
+    else:
+        text_labels = ["a photo of %s"%v for v in label_names]
+        text_labels = tokenizer(text_labels, padding=True, return_tensors="pt")['input_ids'].cuda()
+        text_label_embeds = text_model(text_labels).text_embeds # (B, N_labels, 768)
         text_label_embeds = text_label_embeds / text_label_embeds.norm(p=2, dim=-1, keepdim=True)
 
     if args.save_image:
@@ -107,6 +139,7 @@ def generate_adversarials_pgd(args):
                             args.attack_name, 
                             text_label_embeds, 
                             vision_model, 
+                            use_descriptors=args.use_descriptors,
                             save_image=args.save_image, 
                             image_name=base_name, 
                             lr=args.lr,
@@ -118,8 +151,7 @@ def generate_adversarials_pgd(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument("--image_name", type=str, default="zebra.jpeg")
-    parser.add_argument("--image_list", type=str, default="./coco_test.txt")
-    parser.add_argument("--label_list", type=str, default="./coco_label.json")
+    parser.add_argument("--dataset", type=str, default="coco")
     parser.add_argument("--attack_name", type=str, default="pgd")
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--nb_iter", type=int, default=30)
