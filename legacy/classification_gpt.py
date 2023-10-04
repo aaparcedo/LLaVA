@@ -9,7 +9,7 @@ from PIL import Image
 from transformers import AutoTokenizer
 from llava.utils import disable_torch_init
 from llava.model import *
-from func import *
+from utils.func import *
 
 import torchvision.transforms as transforms
 

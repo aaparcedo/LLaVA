@@ -184,7 +184,7 @@ def fast_gradient_method(
     return adv_x
 
 
-def projected_gradient_descent(
+def pgd(
     model_fn,
     x,
     eps,

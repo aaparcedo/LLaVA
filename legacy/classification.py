@@ -213,14 +213,14 @@ def eval_model(args):
             text_label_embeds = text_label_embeds / text_label_embeds.norm(p=2, dim=-1, keepdim=True)
 
             ## LLaVA text embedding
-            response, image_cls_token = run_LLaVA(args, llava_model, llava_tokenizer, image)
+            response, image_cls_token = run_LLaVA(args,  image)
             
             image_embeds = vision_model.visual_projection(image_cls_token)
             image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
             text_response = tokenizer(response, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
             text_response_embeds = text_model(text_response).text_embeds
             text_response_embeds = text_response_embeds / text_response_embeds.norm(p=2, dim=-1, keepdim=True)
-
+            
             attention_scores = torch.nn.functional.softmax(torch.mm(image_embeds, text_response_embeds.t()) / args.temp, dim=1)
             weighted_sum = torch.mm(attention_scores, text_response_embeds)
 
@@ -228,9 +228,9 @@ def eval_model(args):
             combined_embeds = combined_embeds / combined_embeds.norm(p=2, dim=-1, keepdim=True)
             # text_label_embeds: (N_labels, 768)
             # image_embeds: (1, 768)
-            # text_response_embeds: (1, 768)
+            # text_response_embeds: (5, 768)
 
-            
+
             ## zero-shot result with image
             logits_per_image = torch.matmul(image_embeds, text_label_embeds.t())
 

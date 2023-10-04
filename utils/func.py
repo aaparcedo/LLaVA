@@ -199,7 +199,7 @@ def classify_with_descriptors(text_response_embeds, image_embeds, text_label_emb
         
     for label in text_label_embeds:
         label = label / label.norm(p=2, dim=-1, keepdim=True)
-        logit = torch.mm(image_embeds, label.t()).mean(-1)
+        logit = torch.mm(image_embeds, label.t()).mean(-1) # 1 768 @ 768 5 -> 1,5 -> 1
         logits_image.append(logit.squeeze())
 
     logits_image = torch.stack(logits_image)

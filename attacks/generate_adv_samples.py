@@ -7,33 +7,32 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 import argparse
-from ..func import compute_img_text_logits, make_descriptor_sentence
+from utils.func import compute_img_text_logits, make_descriptor_sentence
 from llava.utils import disable_torch_init
 from llava.model import *
 import torchvision.transforms as transforms
 from .helpers import * 
 import torch.nn.functional as F
-from .pgd import projected_gradient_descent
-from .sparse_l1 import sparse_l1_descent
-from .cw import carlini_wagner_l2
+from .pgd import pgd
+from .sparse_l1 import sl1d
+from .cw import cw2
 
 denormalize = transforms.Normalize((-0.485/0.229, -0.456/0.224, -0.406/0.225), 
                                    (1/0.229, 1/0.224, 1/0.225)) # for denormalizing images
 
-@torch.enable_grad()
 def generate_one_adv_sample(image, 
                             attack_name, 
                             text_label_embeds, 
                             vision_model, 
                             use_descriptors=False,
                             save_image=True, 
-                            image_name=None, 
+                            save_path=None, 
                             lr=0.01,
                             nb_iter=30,
                             **kwargs) -> torch.Tensor:
 
-    if save_image and not image_name:
-        raise ValueError('If save_image is True, image_name must be provided.')
+    if save_image and not save_path:
+        raise ValueError('If save_image is True, save_path must be provided.')
     attack = eval(attack_name)
     adv_image = attack(
         model_fn=lambda x: compute_img_text_logits(x, text_label_embeds, vision_model, use_descriptors=use_descriptors), 
@@ -43,11 +42,11 @@ def generate_one_adv_sample(image,
         **kwargs
     )
 
-    if args.save_image: 
+    if save_image: 
         denormalized_tensor = denormalize(adv_image)
         save_image = denormalized_tensor.squeeze(0)
         save_image = T.ToPILImage()(save_image)
-        save_image.save(f"../datasets/{args.dataset}/{args.attack_name}_eps{args.eps}_lr{args.lr}_steps{args.nb_iter}_norm{args.norm}/{image_name}")
+        save_image.save(save_path)
     
     return adv_image
 

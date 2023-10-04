@@ -1,7 +1,7 @@
 import torch
 from .helpers import *
 
-def sparse_l1_descent(
+def sl1d(
     model_fn,
     x,
     eps=10.0,
@@ -17,7 +17,7 @@ def sparse_l1_descent(
     sanity_checks=True,
     **kwargs
 ):
-    """
+    """ 
     This class implements a variant of Projected Gradient Descent for the l1-norm
     (Tramer and Boneh 2019). The l1-norm case is more tricky than the l-inf and l2
     cases covered by the ProjectedGradientDescent class, because the steepest

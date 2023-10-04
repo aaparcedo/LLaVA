@@ -1,7 +1,7 @@
 import torch
 from .helpers import *
 
-def carlini_wagner_l2(
+def cw2(
     model_fn,
     x,
     n_classes,
