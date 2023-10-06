@@ -1,6 +1,7 @@
 import torch
 from .helpers import *
 
+@torch.enable_grad()
 def cw2(
     model_fn,
     x,
@@ -106,7 +107,7 @@ def cw2(
     upper_bound = [1e10] * len(x)
     const = x.new_ones(len(x), 1) * initial_const
 
-    o_bestl2 = [INF] * len(x)
+    o_bestl2 = [np.INF] * len(x)
     o_bestscore = [-1.0] * len(x)
     x = torch.clamp(x, clip_min, clip_max)
     ox = x.clone().detach()  # save the original x
@@ -133,7 +134,7 @@ def cw2(
     # Outer loop performing binary search on const
     for outer_step in range(binary_search_steps):
         # Initialize some values needed for the inner loop
-        bestl2 = [INF] * len(x)
+        bestl2 = [np.INF] * len(x)
         bestscore = [-1.0] * len(x)
 
         # Inner loop performing attack iterations

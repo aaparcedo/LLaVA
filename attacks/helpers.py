@@ -1,6 +1,31 @@
 import torch
 import numpy as np
 
+def compute_img_text_logits(x, text_embeddings, vision_model, use_descriptors=False):
+    """
+    model_fn for CLIP as required in Cleverhans' attacks.
+    :param x: Image tensor.
+    :param text_embeddings: Precomputed text embeddings for all labels.
+    :return: Similarity scores between the image and all text labels.
+    """
+
+    image_embeds = vision_model(x).image_embeds # (B, 768)
+
+    if use_descriptors:
+        
+        assert type(text_embeddings) == list, "To use descriptors, text_embeddings must be a list of tensors"
+
+        for label in text_embeddings: # label: (B, N_descriptions, 768)
+            logit = torch.mm(image_embeds, label.t()).mean(-1).squeeze(0) # average over all descriptions
+            logits_per_image.append(logit)
+
+        logits_per_image = torch.stack(logits_per_image)
+    else:
+        logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
+
+    return logits_per_image
+
+
 def print_clip_top_probs(logits_per_image, classes):
     """
     Print the top 5 class probabilities for a given image based on its logits.

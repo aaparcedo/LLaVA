@@ -22,32 +22,6 @@ def boolean_string(s):
     return s == 'True'
 
 
-def compute_img_text_logits(x, text_embeddings, vision_model, use_descriptors=False):
-    """
-    Compute CLIP similarity scores between an image and a set of text embeddings.
-     ** Assume inputs are normalized. **
-    :param x: Image tensor.
-    :param text_embeddings: Precomputed text embeddings for all labels.
-    :return: Similarity scores between the image and all text labels.
-    """
-
-    image_embeds = vision_model(x).image_embeds # (B, 768)
-
-    if use_descriptors:
-        
-        assert type(text_embeddings) == list, "To use descriptors, text_embeddings must be a list of tensors"
-
-        for label in text_embeddings: # label: (B, N_descriptions, 768)
-            logit = torch.mm(image_embeds, label.t()).mean(-1).squeeze(0) # average over all descriptions
-            logits_per_image.append(logit)
-
-        logits_per_image = torch.stack(logits_per_image)
-    else:
-        logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
-
-    return logits_per_image
-
-
 def fgsm_sample_generation(vision_model, image, text_embeds, label_name, label_names, adv_temp=0.05, LR=0.5, steps=50):
 
     adv_label = get_different_class(label_name, label_names)

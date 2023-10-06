@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 import argparse
-from utils.func import compute_img_text_logits, make_descriptor_sentence
+from utils.func import make_descriptor_sentence
 from llava.utils import disable_torch_init
 from llava.model import *
 import torchvision.transforms as transforms
@@ -26,13 +26,15 @@ def generate_one_adv_sample(image,
                             vision_model, 
                             use_descriptors=False,
                             save_image=True, 
-                            save_path=None, 
+                            save_folder=None, 
+                            save_names=None,
                             lr=0.01,
                             nb_iter=30,
                             **kwargs) -> torch.Tensor:
 
-    if save_image and not save_path:
+    if save_image and not (save_folder or save_names):
         raise ValueError('If save_image is True, save_path must be provided.')
+    text_label_embeds.requires_grad = True
     attack = eval(attack_name)
     adv_image = attack(
         model_fn=lambda x: compute_img_text_logits(x, text_label_embeds, vision_model, use_descriptors=use_descriptors), 
@@ -44,9 +46,10 @@ def generate_one_adv_sample(image,
 
     if save_image: 
         denormalized_tensor = denormalize(adv_image)
-        save_image = denormalized_tensor.squeeze(0)
-        save_image = T.ToPILImage()(save_image)
-        save_image.save(save_path)
+        for i in range(len(save_names)):
+            save_image = denormalized_tensor[i]
+            save_image = T.ToPILImage()(save_image)
+            save_image.save(save_names[i])
     
     return adv_image
 

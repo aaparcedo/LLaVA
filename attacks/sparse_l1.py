@@ -1,6 +1,7 @@
 import torch
 from .helpers import *
 
+@torch.enable_grad()
 def sl1d(
     model_fn,
     x,

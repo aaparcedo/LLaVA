@@ -11,6 +11,7 @@ DEFAULT_IMAGE_PATCH_TOKEN = "<im_patch>"
 DEFAULT_IM_START_TOKEN = "<im_start>"
 DEFAULT_IM_END_TOKEN = "<im_end>"
 
+# unwanted_words = ['sure', 'okay', 'yes', 'of course', 'yeah', 'no problem']
 
 def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
 
@@ -55,7 +56,6 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
     inputs = llava_tokenizer([prompt])
 
     input_ids = torch.as_tensor(inputs.input_ids).cuda()
-
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     keywords = [stop_str]
     stopping_criteria = KeywordsStoppingCriteria(keywords, llava_tokenizer, input_ids)
@@ -68,7 +68,6 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
             temperature=args.llava_temp,
             max_new_tokens=1024,
             stopping_criteria=[stopping_criteria])
-    
     input_token_len = input_ids.shape[1]
     n_diff_input_output = (input_ids != output_ids[:, :input_token_len]).sum().item()
     if n_diff_input_output > 0:
@@ -80,8 +79,12 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
     outputs = outputs.strip()
     sentences = outputs.split('\n')
     parsed_responses = []
+
     for response in sentences:
-        match = re.search(r':\s(.*)', response)
+        if args.task == 'classification' and args.use_descriptors:
+            match = re.search(r':\s(.*)', response)
+        else:
+            match = re.search(r'\d\.(.*)', response)
         if match:
             parsed_responses.append(match.group(1))
     return parsed_responses, llava_model.model.image_cls_token

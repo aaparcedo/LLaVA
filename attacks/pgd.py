@@ -86,6 +86,7 @@ def optimize_linear(grad, eps, norm=np.inf):
     scaled_perturbation = eps * optimal_perturbation
     return scaled_perturbation
 
+@torch.enable_grad()
 def fast_gradient_method(
     model_fn,
     x,

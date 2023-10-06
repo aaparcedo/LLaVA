@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --ntasks-per-node=2
 #SBATCH --gres=gpu:2
 #SBATCH --time=72:00:00
@@ -10,10 +10,10 @@
 dataset="coco"
 attack_name="pgd"
 shared_folder="/groups/sernam"
-export log_file="/${shared_folder}/adv_llava/results/${dataset}_logs/${attack_name}_$SLURM_JOB_ID.log"
+export log_file="/${shared_folder}/adv_llava/results/${dataset}_logs/noattack_$SLURM_JOB_ID.log"
 
 mkdir -p "/${shared_folder}/adv_llava/results/${dataset}_logs"
-exec &> $log_file
+exec &> ./main_output.out
 
 module load cuda/cuda-12.1
 echo "Starting time: $(date)" 
@@ -27,10 +27,9 @@ export PYTHONPATH=$PYTHONPATH:~/projects/LLaVA
     --model-name "${shared_folder}/ckpts/LLAMA-on-LLaVA" \
     --dataset "coco" \
     --image_size 224 \
-    --subset 5 \
+    --subset 50 \
     --llava_temp 0.1 \
     --temp 0.1 \
-    --adv 'True' \
     --save_image 'False' \
     --attack_name "pgd" \
     --lr 0.01 \
