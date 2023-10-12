@@ -1,27 +1,42 @@
 import torch
 import numpy as np
 
-def compute_img_text_logits(x, text_embeddings, vision_model, use_descriptors=False):
+def compute_output_logits(x, vision_model, text_embeddings=None, use_descriptors=False, use_last_n_hidden=None, model_name=None):
     """
-    model_fn for CLIP as required in Cleverhans' attacks.
+    model_fn for CLIP/Other models as required in Cleverhans' attacks.
     :param x: Image tensor.
     :param text_embeddings: Precomputed text embeddings for all labels.
+    :param use_similarity: Whether to use cosine similarity (CLIP) or the model's own logits (Resnet, ViT, etc.).
     :return: Similarity scores between the image and all text labels.
     """
 
-    image_embeds = vision_model(x).image_embeds # (B, 768)
+    if 'clip' in model_name.lower() or 'llava' in model_name.lower():
+        # if not using the last hidden state, use that middle hidden state + layernorm + classifier
+        if use_last_n_hidden is None or use_last_n_hidden == 1:
+            image_embeds = vision_model(x).image_embeds # (B, 768)
+        else:
+            image_embeds = vision_model(x).hidden_states[-use_last_n_hidden][:, 0, :]
+            image_embeds = list(list(vision_model.named_children())[0][1].named_children())[-1][1](image_embeds) # post layernorm
+            image_embeds = vision_model.visual_projection(image_embeds)
+        if use_descriptors:
+            
+            assert type(text_embeddings) == list, "To use descriptors, text_embeddings must be a list of tensors"
 
-    if use_descriptors:
-        
-        assert type(text_embeddings) == list, "To use descriptors, text_embeddings must be a list of tensors"
+            for label in text_embeddings: # label: (B, N_descriptions, 768)
+                logit = torch.mm(image_embeds, label.t()).mean(-1).squeeze(0) # average over all descriptions
+                logits_per_image.append(logit)
 
-        for label in text_embeddings: # label: (B, N_descriptions, 768)
-            logit = torch.mm(image_embeds, label.t()).mean(-1).squeeze(0) # average over all descriptions
-            logits_per_image.append(logit)
-
-        logits_per_image = torch.stack(logits_per_image)
-    else:
-        logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
+            logits_per_image = torch.stack(logits_per_image)
+        else:
+            logits_per_image = torch.matmul(image_embeds, text_embeddings.t())
+    elif 'vit' in model_name:
+        # if not using the last hidden state, use that middle hidden state + layernorm + classifier
+        if use_last_n_hidden and use_last_n_hidden > 1:
+            logits_per_image = vision_model(x).hidden_states[-use_last_n_hidden][:, 0, :]
+            logits_per_image = list(list(vision_model.named_children())[0][1].named_children())[-1][1](logits_per_image) # post layernorm
+            logits_per_image = vision_model.classifier(logits_per_image)
+        else:
+            logits_per_image = vision_model(x).logits
 
     return logits_per_image
 

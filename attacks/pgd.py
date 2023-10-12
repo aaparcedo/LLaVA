@@ -199,6 +199,7 @@ def pgd(
     rand_init=True,
     rand_minmax=None,
     sanity_checks=True,
+    **kwargs,
 ):
     """
     This class implements either the Basic Iterative Method

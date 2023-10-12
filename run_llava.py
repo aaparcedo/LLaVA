@@ -1,10 +1,11 @@
 import torch
 import os, re
-from transformers import AutoTokenizer, CLIPVisionModel
+from transformers import AutoTokenizer, CLIPVisionModel, CLIPImageProcessor
 from llava.model import *
 from attacks.helpers import *
 from llava.model.utils import KeywordsStoppingCriteria
 from llava.conversation import conv_templates, SeparatorStyle
+from PIL import Image
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 DEFAULT_IMAGE_PATCH_TOKEN = "<im_patch>"
@@ -80,7 +81,11 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
     sentences = outputs.split('\n')
     parsed_responses = []
 
+    if len(sentences) == 1:
+        return sentences[0], llava_model.model.image_cls_token
+
     for response in sentences:
+        
         if args.task == 'classification' and args.use_descriptors:
             match = re.search(r':\s(.*)', response)
         else:
@@ -89,3 +94,9 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
             parsed_responses.append(match.group(1))
     return parsed_responses, llava_model.model.image_cls_token
 
+if __name__ == '__main__':
+    llava_tokenizer = AutoTokenizer.from_pretrained('/groups/sernam/ckpts/LLAMA-on-LLaVA')
+    llava_model = LlavaLlamaForCausalLM.from_pretrained('/groups/sernam/ckpts/LLAMA-on-LLaVA', low_cpu_mem_usage=True, torch_dtype=torch.float16, use_cache=True).cuda()
+    image_processor = CLIPImageProcessor.from_pretrained('openai/clip-vit-large-patch14')
+    img = Image.open('/groups/sernam/datasets/imagenet/val/ILSVRC2012_val_00000001.JPEG')
+    run_LLaVA(llava_model, llava_tokenizer, image_processor().cuda())

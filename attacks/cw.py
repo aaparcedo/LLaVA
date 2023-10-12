@@ -1,8 +1,10 @@
 import torch
+import torch.optim as optim
+import torch.nn as nn
 from .helpers import *
 
 @torch.enable_grad()
-def cw2(
+def cw(
     model_fn,
     x,
     n_classes,
@@ -107,7 +109,7 @@ def cw2(
     upper_bound = [1e10] * len(x)
     const = x.new_ones(len(x), 1) * initial_const
 
-    o_bestl2 = [np.INF] * len(x)
+    o_bestl2 = [np.inf] * len(x)
     o_bestscore = [-1.0] * len(x)
     x = torch.clamp(x, clip_min, clip_max)
     ox = x.clone().detach()  # save the original x
@@ -134,7 +136,7 @@ def cw2(
     # Outer loop performing binary search on const
     for outer_step in range(binary_search_steps):
         # Initialize some values needed for the inner loop
-        bestl2 = [np.INF] * len(x)
+        bestl2 = [np.inf] * len(x)
         bestscore = [-1.0] * len(x)
 
         # Inner loop performing attack iterations
@@ -189,3 +191,72 @@ def cw2(
                     const[n] *= 10
 
     return o_bestattack.detach()
+
+
+def cw_torchattach(lr, y, targeted, nb_iter):
+    images = images.clone().detach().cuda()
+    labels = labels.clone().detach().cuda()
+
+    if targeted:
+        target_labels = y
+
+    # w = torch.zeros_like(images).detach() # Requires 2x times
+    w = inverse_tanh_space(images).detach()
+    w.requires_grad = True
+
+    best_adv_images = images.clone().detach()
+    best_L2 = 1e10*torch.ones((len(images))).cuda()
+    prev_cost = 1e10
+    dim = len(images.shape)
+
+    MSELoss = nn.MSELoss(reduction='none')
+    Flatten = nn.Flatten()
+
+    optimizer = optim.Adam([w], lr=lr)
+
+    for step in range(steps):
+        # Get adversarial images
+        adv_images = tanh_space(w)
+
+        # Calculate loss
+        current_L2 = MSELoss(Flatten(adv_images),
+                                Flatten(images)).sum(dim=1)
+        L2_loss = current_L2.sum()
+
+        outputs = get_logits(adv_images)
+        if targeted:
+            f_loss = f(outputs, target_labels).sum()
+        else:
+            f_loss = f(outputs, labels).sum()
+
+        cost = L2_loss + c*f_loss
+
+        optimizer.zero_grad()
+        cost.backward()
+        optimizer.step()
+
+        # Update adversarial images
+        pre = torch.argmax(outputs.detach(), 1)
+        if targeted:
+            # We want to let pre == target_labels in a targeted attack
+            condition = (pre == target_labels).float()
+        else:
+            # If the attack is not targeted we simply make these two values unequal
+            condition = (pre != labels).float()
+
+        # Filter out images that get either correct predictions or non-decreasing loss,
+        # i.e., only images that are both misclassified and loss-decreasing are left
+        mask = condition*(best_L2 > current_L2.detach())
+        best_L2 = mask*current_L2.detach() + (1-mask)*best_L2
+
+        mask = mask.view([-1]+[1]*(dim-1))
+        best_adv_images = mask*adv_images.detach() + (1-mask)*best_adv_images
+
+        # Early stop when loss does not converge.
+        # max(.,1) To prevent MODULO BY ZERO error in the next step.
+        if step % max(steps//10, 1) == 0:
+            if cost.item() > prev_cost:
+                return best_adv_images
+            prev_cost = cost.item()
+
+    return best_adv_images

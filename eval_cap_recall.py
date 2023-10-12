@@ -18,6 +18,8 @@ from datetime import datetime
 
 from transformers import AutoTokenizer, CLIPVisionModelWithProjection, CLIPTextModelWithProjection, AutoProcessor
 
+disable_torch_init()
+
 clip_model_name = "openai/clip-vit-large-patch14"
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -26,8 +28,8 @@ vision_model = CLIPVisionModelWithProjection.from_pretrained(clip_model_name, ou
 language_model = CLIPTextModelWithProjection.from_pretrained(clip_model_name, torch_dtype=torch.float16).to(device).eval()
 
 model_name = "/groups/sernam/ckpts/LLAMA-on-LLaVA"
-# llava_tokenizer = AutoTokenizer.from_pretrained(model_name)
-# llava_model = LlavaLlamaForCausalLM.from_pretrained(model_name, low_cpu_mem_usage=True, torch_dtype=torch.float16, use_cache=True).to(device).eval()
+llava_tokenizer = AutoTokenizer.from_pretrained(model_name)
+llava_model = LlavaLlamaForCausalLM.from_pretrained(model_name, low_cpu_mem_usage=True, torch_dtype=torch.float16, use_cache=True).to(device).eval()
 
 processor = AutoProcessor.from_pretrained(clip_model_name)
 
@@ -141,26 +143,26 @@ def encode_llava(args, text_label_embeds, dataset: dutils.Dataset, batch_size = 
         with torch.no_grad():
             # B x 5 x 77 -> (B*5) x 77
             text = torch.flatten(text, start_dim=0, end_dim=1)
-            #response, img_cls_token = run_LLaVA(args, llava_model, llava_tokenizer, images)
+            response, img_cls_token = run_LLaVA(args, llava_model, llava_tokenizer, images)
 
             if args.first_response_only:
                 response = response[0]
-            #image_embeds = vision_model.visual_projection(img_cls_token) # b 768
+            image_embeds = vision_model.visual_projection(img_cls_token) # b 768
             image_embeds = vision_model(images).image_embeds # b 768
-            # text_response = clip_tokenizer(response, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda() # N_response, embed
-            # text_response_encoding = language_model(text_response).text_embeds # 5 768
+            text_response = clip_tokenizer(response, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda() # N_response, embed
+            text_response_encoding = language_model(text_response).text_embeds # 5 768
 
         image_encodings.append(image_embeds)
-        # text_response_encodings.append(text_response_encoding)
+        text_response_encodings.append(text_response_encoding)
 
     image_encodings = torch.cat(image_encodings)
-    # text_response_encodings = torch.stack(text_response_encodings, 0)
+    text_response_encodings = torch.stack(text_response_encodings, 0)
     text_to_image_map = torch.LongTensor(text_to_image_map).to(device)
     image_to_text_map = torch.LongTensor(image_to_text_map).to(device)
 
     # Normalise encodings
     image_encodings = image_encodings / image_encodings.norm(dim=-1, keepdim=True)
-    # text_response_encodings = text_response_encodings / text_response_encodings.norm(dim=-1, keepdim=True)
+    text_response_encodings = text_response_encodings / text_response_encodings.norm(dim=-1, keepdim=True)
 
     return image_encodings, text_response_encodings, text_to_image_map, image_to_text_map
 
@@ -243,10 +245,10 @@ def main(args):
     text_label_embeds = encode_all_captions(query_dataset)
     image_encodings, text_response_encodings, text_to_image_map, image_to_text_map = encode_llava(args, text_label_embeds, query_dataset, batch_size=1)
 
-    # if not args.first_response_only:
-    #     text_response_encodings = text_response_encodings.mean(dim=1) # llava has multiple responses per image, average them for now
+    if not args.first_response_only:
+        text_response_encodings = text_response_encodings.mean(dim=1) # llava has multiple responses per image, average them for now
     t2i, i2t = recall_at_k(image_encodings, text_label_embeds, text_to_image_map, image_to_text_map, k_vals=k_vals)
-    # cap2llava, llava2cap = recall_at_k(text_response_encodings, text_label_embeds, text_to_image_map, image_to_text_map, k_vals=k_vals)
+    cap2llava, llava2cap = recall_at_k(text_response_encodings, text_label_embeds, text_to_image_map, image_to_text_map, k_vals=k_vals)
 
     print("Text-to-image Recall@K")
     for k, x in zip(k_vals, t2i):
@@ -256,13 +258,13 @@ def main(args):
     for k, x in zip(k_vals, i2t):
         print(f" R@{k}: {100*x:.2f}%")
 
-    # print("Text-to-Llava Recall@K")
-    # for k, x in zip(k_vals, cap2llava):
-    #     print(f" R@{k}: {100*x:.2f}%")
+    print("Text-to-Llava Recall@K")
+    for k, x in zip(k_vals, cap2llava):
+        print(f" R@{k}: {100*x:.2f}%")
 
-    # print("Llava-to-text Recall@K")
-    # for k, x in zip(k_vals, llava2cap):
-    #     print(f" R@{k}: {100*x:.2f}%")
+    print("Llava-to-text Recall@K")
+    for k, x in zip(k_vals, llava2cap):
+        print(f" R@{k}: {100*x:.2f}%")
 
     end_time = datetime.now()
     time_elapsed = end_time - start_time
@@ -278,13 +280,13 @@ def main(args):
         for k, x in zip(k_vals, i2t):
             f.writelines(f" R@{k}: {100*x:.2f}%\n")
 
-        # f.writelines("Text-to-Llava Recall@K")
-        # for k, x in zip(k_vals, cap2llava):
-        #     f.writelines(f" R@{k}: {100*x:.2f}%\n")
+        f.writelines("Text-to-Llava Recall@K")
+        for k, x in zip(k_vals, cap2llava):
+            f.writelines(f" R@{k}: {100*x:.2f}%\n")
 
-        # f.writelines("Llava-to-text Recall@K\n")
-        # for k, x in zip(k_vals, llava2cap):
-        #     f.writelines(f" R@{k}: {100*x:.2f}%\n")
+        f.writelines("Llava-to-text Recall@K\n")
+        for k, x in zip(k_vals, llava2cap):
+            f.writelines(f" R@{k}: {100*x:.2f}%\n")
         f.write("Start time: {} End time: {} Time elapsed: {}\n".format(start_time, end_time, time_elapsed))
 
 if __name__ == "__main__":
@@ -299,6 +301,7 @@ if __name__ == "__main__":
     parser.add_argument("--temp", type=float, default=0.1)
     parser.add_argument("--save_image", type=boolean_string, required=False, default='False')
     parser.add_argument("--first_response_only", type=boolean_string, required=False, default='True')
+    parser.add_argument("--generate_one_response", type=boolean_string, required=False, default='False')
 
     # args for adv attack
     parser.add_argument("--attack_name", type=str, default="pgd")

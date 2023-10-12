@@ -3,13 +3,13 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=2
 #SBATCH --gres=gpu:2
-#SBATCH --time=72:00:00
+#SBATCH --time=16:00:00
 #SBATCH --job-name=attack
 #SBATCH --constraint=h100
 
 
 dataset="coco"
-attack_name="pgd"
+attack_name="None"
 shared_folder="/groups/sernam"
 export log_file="/${shared_folder}/adv_llava/results/retrieval/coco_clip_recall@k_$SLURM_JOB_ID.log"
 
@@ -29,6 +29,8 @@ export PYTHONPATH=$PYTHONPATH:~/projects/LLaVA
     --dataset $dataset \
     --attack_name $attack_name \
     --first_response_only False \
-    --save_image False
+    --save_image False \
+    --generate_one_response True \
+    --query "Generate one sentence of very short caption for this image."
 
 rm "./slurm-${SLURM_JOB_ID}.out"

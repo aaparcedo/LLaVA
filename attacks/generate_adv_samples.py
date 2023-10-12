@@ -15,30 +15,38 @@ from .helpers import *
 import torch.nn.functional as F
 from .pgd import pgd
 from .sparse_l1 import sl1d
-from .cw import cw2
+from .cw import cw
 
 denormalize = transforms.Normalize((-0.485/0.229, -0.456/0.224, -0.406/0.225), 
                                    (1/0.229, 1/0.224, 1/0.225)) # for denormalizing images
 
 def generate_one_adv_sample(image, 
                             attack_name, 
-                            text_label_embeds, 
-                            vision_model, 
+                            model_name,
+                            vision_model,
+                            text_label_embeds=None, 
                             use_descriptors=False,
+                            y=None,
                             save_image=True, 
                             save_folder=None, 
                             save_names=None,
+                            use_last_n_hidden=None,
                             lr=0.01,
                             nb_iter=30,
                             **kwargs) -> torch.Tensor:
 
-    if save_image and not (save_folder or save_names):
+    if save_image and not (save_folder or save_names or save_folder == 'None'):
         raise ValueError('If save_image is True, save_path must be provided.')
-    text_label_embeds.requires_grad = True
+    if text_label_embeds is not None:
+        text_label_embeds.requires_grad = True
+
     attack = eval(attack_name)
     adv_image = attack(
-        model_fn=lambda x: compute_img_text_logits(x, text_label_embeds, vision_model, use_descriptors=use_descriptors), 
+        model_fn=lambda x: compute_output_logits(x, vision_model, text_label_embeds, use_descriptors=use_descriptors, 
+                                                 use_last_n_hidden=use_last_n_hidden, model_name=model_name), 
         x=image,
+        y=y,
+        targeted=(y is not None),
         lr=lr,
         nb_iter=nb_iter,
         **kwargs
@@ -49,7 +57,7 @@ def generate_one_adv_sample(image,
         for i in range(len(save_names)):
             save_image = denormalized_tensor[i]
             save_image = T.ToPILImage()(save_image)
-            save_image.save(save_names[i])
+            save_image.save(os.path.join(save_folder,save_names[i]))
     
     return adv_image
 
