@@ -5,17 +5,14 @@ import os
 import numpy as np
 from PIL import Image
 import argparse
-from transformers import AutoTokenizer, CLIPVisionModelWithProjection, CLIPTextModelWithProjection
 from attacks.generate_adv_samples import generate_one_adv_sample
-from datasets import BaseDataset
-from utils.func import make_descriptor_sentence
+from datasets_loader import BaseDataset
 from llava.utils import disable_torch_init
 from llava.model import *
 import torchvision.transforms as transforms
 from attacks.helpers import *
 from torchvision.datasets import ImageFolder
 import torch.nn.functional as F
-from run_llava import run_LLaVA
 from torch.utils.data import DataLoader, Subset
 import datetime
 from utils.metric import AverageMeter, accuracy
@@ -24,6 +21,7 @@ import random
 # from tqdm import tqdm
 # tqdm = partial(tqdm, position=0, leave=True)
 from tqdm.auto import tqdm
+from models import get_model
 
 # Disable warning for tokenizer parallelism
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
@@ -31,42 +29,19 @@ denormalize = transforms.Normalize((-0.485/0.229, -0.456/0.224, -0.406/0.225), (
 
 single_prompt="Please describe the image in one sentence."
 descriptor_prompt="Fill in the blank of five templates with single sentence regarding this image. Please follow the format as - 1.Content:{}, 2.Background:{}, 3.Composition:{}, 4.Attribute:{}, 5.Context:{}"
-llava_name = '/groups/sernam/ckpts/LLAMA-on-LLaVA'
-clip_name = "openai/clip-vit-large-patch14"
 
 disable_torch_init()
 
-vision_model = CLIPVisionModelWithProjection.from_pretrained(clip_name, torch_dtype=torch.float16).cuda().eval()
-text_model = CLIPTextModelWithProjection.from_pretrained(clip_name, torch_dtype=torch.float16).cuda().eval()
-clip_tokenizer = AutoTokenizer.from_pretrained(clip_name)
-
-def get_dataloader(args):
-
+def get_dataloader(model, args):
+        
     if args.save_image and args.adv_path:
         os.makedirs(args.adv_path, exist_ok=True)
-
-    if args.dataset == 'imagenet':
-        with open('/groups/sernam/datasets/imagenet/labels/imagenet_simple_labels.json') as f:
-            label_list = json.load(f)
-        dataset = ImageFolder(root="/datasets/ImageNet2012nonpub/validation", transform=transforms.Compose([
-                        transforms.Resize(size=(args.image_size, args.image_size)),
-                        transforms.ToTensor(),
-                        transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
-                    ]))
-        dataset = Subset(dataset, random.sample(range(len(dataset)), args.subset))
-        dataset.label_list = label_list
-        text_labels = ["a photo of %s"%v for v in label_list]
-        with torch.no_grad():
-            text_labels = clip_tokenizer(text_labels, padding=True, return_tensors="pt")['input_ids'].cuda()
-            text_label_embeds = F.normalize(text_model(text_labels).text_embeds, p=2., dim=-1) # (N_labels, 768)
-        dataset.text_label_embeds = text_label_embeds
-    elif args.dataset == 'coco':
-        dataset = BaseDataset(dataset=args.dataset, path=args.adv_path, task=args.task, image_size=args.image_size, subset=args.subset)
+    dataset = BaseDataset(dataset=args.dataset, model=model, path=args.adv_path, task=args.task, image_size=args.image_size, subset=args.subset, use_descriptors=args.use_descriptors)
         
-    dataloader = DataLoader(dataset, batch_size=16, num_workers=8, shuffle=False, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=12, shuffle=False, pin_memory=True)
     return dataset, dataloader
 
-def main(args):
+def main(model, args):
     print(f"Slurm job ID: {os.environ.get('SLURM_JOB_ID', None)}")
     start_time = datetime.datetime.now()
 
@@ -74,65 +49,29 @@ def main(args):
 
     acc1, acc5 = AverageMeter(), AverageMeter()
     for data in tqdm(dataloader):
-        if args.dataset == 'imagenet':
-            images, labels = data
-            base_paths = None
-        else:
-            images, base_paths, labels = data
+
+        images, base_paths, labels = data
         images = images.cuda().half()
         labels = labels.cuda()
-        # before_response, before_image_cls_token = run_LLaVA(args, llava_model, llava_tokenizer, images)
-        # transforms.ToPILImage()(denormalize(images[0])).save('./orig.png')
-        # print('==> before: ', before_response)
 
-        # args.adv_path != None means the images loaded are already adversarial
-        if (not args.adv_path or args.adv_path != 'None') and (args.attack_name != 'None'):
+        if (not args.adv_path or args.adv_path == 'None') and (args.attack_name != 'None'):
             if args.targeted:
                 targeted_labels = torch.cat([get_different_class(c_true, dataset.label_list) for c_true in labels])
             else:
                 targeted_labels = None
-            
-            images = generate_one_adv_sample(images, 
-                args.attack_name, 
-                args.model_name,
-                vision_model, 
-                dataset.text_label_embeds, 
-                use_descriptors=args.use_descriptors,
-                save_image=args.save_image, 
-                save_folder=args.adv_path,
+
+            images = generate_one_adv_sample(
+                args,
+                images, 
+                model,
+                dataset.descriptors_embeds if args.attack_descriptors else dataset.text_label_embeds, 
                 save_names=base_paths, 
                 y=targeted_labels,
-                eps=args.eps, 
-                lr=args.lr, 
-                nb_iter=args.nb_iter, 
-                norm=args.norm,
-                n_classes=len(dataset.label_list),
-                initial_const=args.initial_const,
-                binary_search_steps=args.binary_search_steps,
-                confidence=args.confidence,)
-            # transforms.ToPILImage()(denormalize(images[0])).save('./adv.png')
+                n_classes=len(dataset.label_list))
 
         with torch.no_grad():
 
-            if 'llava' in args.model_name.lower():
-                ## LLaVA text embedding
-                text_response_embeds, image_cls_tokens = [], []
-                for image in images:
-                    image = image.unsqueeze(0)
-                    response, image_cls_token = run_LLaVA(args, llava_model, llava_tokenizer, image)
-                    text_response = clip_tokenizer(response, padding=True, truncation=True, return_tensors="pt")['input_ids'].cuda()
-                    text_response_embed = F.normalize(text_model(text_response).text_embeds, p=2., dim=-1)
-                    text_response_embeds.append(text_response_embed)
-                    image_cls_tokens.append(image_cls_token)
-                
-                text_response_embeds = torch.stack(text_response_embeds, dim=0) # B, n_sentence, 768
-                logits = torch.matmul(text_response_embeds, dataset.text_label_embeds.t()).mean(dim=1)
-
-            elif 'clip' in args.model_name.lower():
-                image_embeds = F.normalize(vision_model(images).image_embeds, p=2., dim=-1)
-                ## zero-shot result with clip
-                logits = torch.matmul(image_embeds, dataset.text_label_embeds.t()) # B, n_label
-
+            logits = model(images, dataset.descriptors_embeds if args.use_descriptors else dataset.text_label_embeds)
             _acc1, _acc5 = accuracy(logits, labels, topk=(1, 5))
 
             # if _acc1 < 100:
@@ -156,10 +95,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", type=str, default="['/groups/sernam/ckpts/LLAMA-on-LLaVA']")
+    parser.add_argument("--model-name", type=str, default="['openai/clip-vit-large-patch14']")
     parser.add_argument("--task", type=str, default="classification", choices=["classification", "caption"])
     parser.add_argument("--dataset", type=str, default="['coco']")
     parser.add_argument("--image_size", type=int, default=224)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--conv-mode", type=str, default=None)
     parser.add_argument("--subset", type=int, default=None, help="number of images to test")
     parser.add_argument("--llava_temp", type=float, default=0.1)
@@ -187,28 +127,33 @@ if __name__ == "__main__":
     parser.add_argument("--confidence", type=float, default=0)
 
     parser.add_argument("--use_descriptors", type=boolean_string, default='False')
+    parser.add_argument("--attack_descriptors", type=boolean_string, default='False')
     parser.add_argument("--generate_one_response", type=boolean_string, default='False')
     parser.add_argument("--query", type=str, default="[descriptor_prompt]")
 
-    
     args = parser.parse_args()
 
     queries = eval(args.query)
     eps = eval(args.eps)
     model_names = eval(args.model_name)
     datasets = eval(args.dataset)
+
+    if args.attack_descriptors and not args.use_descriptors:
+        raise ValueError("If attack_descriptors is True, use_descriptors must be True")
+            
     for model_name in model_names:
     # replace with automodel?
         torch.cuda.empty_cache()
         args.model_name = model_name
-        if 'llava' in model_name.lower():
-            model_name = os.path.expanduser(model_name)
-            llava_tokenizer = AutoTokenizer.from_pretrained(model_name)
-            llava_model = LlavaLlamaForCausalLM.from_pretrained(model_name, low_cpu_mem_usage=True, torch_dtype=torch.float16, use_cache=True).cuda()
+        model = get_model(args)
 
         for ds in datasets:
             args.dataset = ds
-            dataset, dataloader = get_dataloader(args)
+            dataset, dataloader = get_dataloader(model, args)
+            
+            if ds != 'imagenet' and args.use_descriptors:
+                raise ValueError("Only imagenet dataset has descriptors")
+            
             for query in queries:
                 args.query = query
                 for ep in eps:
@@ -249,6 +194,6 @@ if __name__ == "__main__":
                     for k,v in vars(args).items():
                         print(f"{k}: {v}")
 
-                    main(args)
+                    main(model, args)
 
                     print("=" * 50)

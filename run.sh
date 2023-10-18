@@ -1,14 +1,17 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=10
-#SBATCH --gres=gpu:2
-#SBATCH --time=6:00:00
+#SBATCH --cpus-per-task=12
+#SBATCH --gres=gpu:1
+#SBATCH --time=3:00:00
 #SBATCH --constraint=h100
-#SBATCH --job-name=co-llava
+#SBATCH --job-name=unt-llava
 
 
 shared_folder="/groups/sernam"
 export log_file="/${shared_folder}/adv_llava/results/classification_$SLURM_JOB_ID.log"
+blip2="Salesforce/blip2-opt-2.7b"
+llava="/groups/sernam/ckpts/LLAMA-on-LLaVA"
+clip="openai/clip-vit-large-patch14"
 
 exec &> $log_file
 
@@ -24,8 +27,8 @@ rm "./slurm-${SLURM_JOB_ID}.out"
 
 # Run python
 ~/anaconda3/envs/adv_env/bin/python3.9 main.py \
-    --model-name "['clip', 'llava']" \
-    --dataset "['coco']" \
+    --model-name "['$clip', '$llava']" \
+    --dataset "['imagenet']" \
     --image_size 224 \
     --subset 1000 \
     --llava_temp 0.1 \
@@ -33,14 +36,16 @@ rm "./slurm-${SLURM_JOB_ID}.out"
     --save_image 'False' \
     --attack_name "pgd" \
     --lr 0.01 \
-    --eps "[0.03, 0.1, 0.2, 0.5]" \
+    --eps "[0.4]" \
     --grad_sparsity 99 \
     --nb_iter 30 \
     --adv_path None \
     --norm inf \
+    --targeted True \
     --binary_search_steps 5 \
-    --query '[descriptor_prompt, single_prompt]'\
-    --use_descriptors 'False'
+    --query '[descriptor_prompt]'\
+    --use_descriptors 'True' \
+    --attack_descriptors 'True'
 
 
 echo "Ending time: $(date)" 

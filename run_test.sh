@@ -2,15 +2,15 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
-#SBATCH --time=3:00:00
-#SBATCH --job-name=vit-attack
+#SBATCH --time=4:00:00
+#SBATCH --job-name=clip-attack
 
 shared_folder="/groups/sernam"
 
 mkdir -p "/${shared_folder}/adv_llava/results/attacks"
 export log_file="/${shared_folder}/adv_llava/results/attacks/$(date)_$SLURM_JOB_ID.log"
 export TOKENIZERS_PARALLELISM=true
-exec &> test_cw_out.log
+exec &> test_clip_cw_out.log
 
 module load cuda/cuda-12.1
 echo "Starting time: $(date)" 
@@ -19,7 +19,7 @@ echo "Starting time: $(date)"
 source activate ~/anaconda3/envs/adv_env
 export PYTHONPATH=$PYTHONPATH:~/projects/LLaVA
 
-for model_name in "google/vit-large-patch16-224" "openai/clip-vit-large-patch14"
+for model_name in "openai/clip-vit-large-patch14"
 do
     for dataset in "imagenet"
         do

@@ -1,35 +1,17 @@
-from transformers import AutoTokenizer, CLIPVisionModelWithProjection, CLIPTextModelWithProjection, \
-                         BlipModel, BlipForImageTextRetrieval, AutoProcessor, BlipForQuestionAnswering
-# from ..llava.model import *
-import torch
 from PIL import Image
 import requests
+from transformers import Blip2Processor, Blip2Model
+import torch
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def get_model(model_name, task):
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+model = Blip2Model.from_pretrained("Salesforce/blip2-opt-2.7b", torch_dtype=torch.float16)
+model.to(device)
+url = "http://images.cocodataset.org/val2017/000000039769.jpg"
+image = Image.open(requests.get(url, stream=True).raw)
 
-    if model_name == 'clip':
-        vision_model = CLIPVisionModelWithProjection.from_pretrained(model_name, torch_dtype=torch.float16).cuda().eval()
-        text_model = CLIPTextModelWithProjection.from_pretrained(model_name, torch_dtype=torch.float16).cuda().eval()
-    elif model_name == 'blip':
-        model = BlipForImageTextRetrieval.from_pretrained(model_name, torch_dtype=torch.float16).cuda().eval()
-        vision_model = model.vision_model
-        text_model = model.text_model
+prompt = "Question: how many cats are there? Answer:"
+inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, torch.float16)
 
-    return tokenizer, vision_model, text_model
-
-
-if __name__ == '__main__':
-    model = BlipModel.from_pretrained("Salesforce/blip-image-captioning-base")
-    processor = AutoProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-    url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-    image = Image.open(requests.get(url, stream=True).raw)
-    inputs = processor(images=image, return_tensors="pt")
-    image_features = model.get_image_features(**inputs)
-
-    text = "an image of a cat"
-    text_image_inputs = processor(images=image, text=text, return_tensors="pt")
-
-    model = BlipForImageTextRetrieval.from_pretrained("Salesforce/blip-itm-base-coco")
-    outputs = model(**text_image_inputs)
+outputs = model(**inputs)

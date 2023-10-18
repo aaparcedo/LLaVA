@@ -11,7 +11,7 @@ import argparse
 import torch.nn.functional as F
 from transformers import AutoTokenizer
 from attacks.generate_adv_samples import generate_one_adv_sample
-from datasets import BaseDataset
+from datasets_loader import BaseDataset
 from llava.conversation import conv_templates, SeparatorStyle
 from llava.utils import disable_torch_init
 from transformers import CLIPVisionModelWithProjection, CLIPTextModelWithProjection, ResNetForImageClassification, ViTForImageClassification
@@ -44,7 +44,7 @@ def eval_model(args):
     disable_torch_init()
     print('==> Loading model ...')
     if  'clip' in args.model_name.lower():
-        tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
         vision_model = CLIPVisionModelWithProjection.from_pretrained(args.model_name, output_hidden_states=True, torch_dtype=torch.float16).cuda().eval()
         text_model = CLIPTextModelWithProjection.from_pretrained(args.model_name, torch_dtype=torch.float16).cuda().eval()
     elif 'resnet' in args.model_name.lower():
@@ -69,7 +69,7 @@ def eval_model(args):
             dataset.label_list = label_list
             dataset.text_label_embeds = None
     else:
-        dataset = BaseDataset(args.dataset, path=None, subset=args.subset)
+        dataset = BaseDataset(args.dataset, model_name=args.model_name, path=None, subset=args.subset)
     
     dataloader = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=False, pin_memory=True)
     acc1, acc5 = AverageMeter(), AverageMeter()

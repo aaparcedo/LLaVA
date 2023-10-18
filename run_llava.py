@@ -14,7 +14,7 @@ DEFAULT_IM_END_TOKEN = "<im_end>"
 
 # unwanted_words = ['sure', 'okay', 'yes', 'of course', 'yeah', 'no problem']
 
-def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
+def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor, text=None, vqa=False):
 
     llava_model.eval()
 
@@ -24,7 +24,13 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
     if mm_use_im_start_end:
         llava_tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
 
-    vision_tower = llava_model.get_model().vision_tower[0]
+    if 'v1.5' in args.model_name:
+        vision_tower = llava_model.get_vision_tower()
+        if not vision_tower.is_loaded:
+            vision_tower.load_model()
+        vision_tower.to('cuda', dtype=torch.float16)
+    else:
+        vision_tower = llava_model.get_model().vision_tower[0]
     if vision_tower.device.type == 'meta':
         vision_tower = CLIPVisionModel.from_pretrained(vision_tower.config._name_or_path, torch_dtype=torch.float16, low_cpu_mem_usage=True).cuda()
         llava_model.get_model().vision_tower[0] = vision_tower
@@ -37,18 +43,19 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
         vision_config.im_start_token, vision_config.im_end_token = llava_tokenizer.convert_tokens_to_ids([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN])
     image_token_len = (vision_config.image_size // vision_config.patch_size) ** 2
 
-    qs = args.query
+    qs = args.query if not text else text
     if mm_use_im_start_end:
         qs = qs + '\n' + DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_PATCH_TOKEN * image_token_len + DEFAULT_IM_END_TOKEN
     else:
         qs = qs + '\n' + DEFAULT_IMAGE_PATCH_TOKEN * image_token_len
 
-    conv_mode = "multimodal"
-    
-    if args.conv_mode is not None and conv_mode != args.conv_mode:
-        print('[WARNING] the auto inferred conversation mode is {}, while `--conv-mode` is {}, using {}'.format(conv_mode, args.conv_mode, args.conv_mode))
-    else:
-        args.conv_mode = conv_mode
+    if not vqa:
+        conv_mode = "multimodal"
+        
+        if args.conv_mode is not None and conv_mode != args.conv_mode:
+            print('[WARNING] the auto inferred conversation mode is {}, while `--conv-mode` is {}, using {}'.format(conv_mode, args.conv_mode, args.conv_mode))
+        else:
+            args.conv_mode = conv_mode
 
     conv = conv_templates[args.conv_mode].copy()
     conv.append_message(conv.roles[0], qs)
@@ -86,13 +93,17 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor):
 
     for response in sentences:
         
-        if args.task == 'classification' and args.use_descriptors:
+        if 'Content: ' in sentences[0]:
             match = re.search(r':\s(.*)', response)
         else:
             match = re.search(r'\d\.(.*)', response)
         if match:
             parsed_responses.append(match.group(1))
     return parsed_responses, llava_model.model.image_cls_token
+
+
+    
+
 
 if __name__ == '__main__':
     llava_tokenizer = AutoTokenizer.from_pretrained('/groups/sernam/ckpts/LLAMA-on-LLaVA')
