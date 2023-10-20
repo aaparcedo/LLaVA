@@ -19,7 +19,7 @@ echo "Starting time: $(date)"
 source activate ~/anaconda3/envs/adv_env
 export PYTHONPATH=$PYTHONPATH:~/projects/LLaVA
 
-for model_name in "openai/clip-vit-large-patch14"
+for model_path in "openai/clip-vit-large-patch14"
 do
     for dataset in "imagenet"
         do
@@ -29,10 +29,10 @@ do
             do 
                 for initial_const in 0.5 1 2 4
                 do
-                    echo "==> Running dataset: $dataset, attack: $attack_name, model: $model_name, use_last_n_hidden: $use_last_n_hidden"
+                    echo "==> Running dataset: $dataset, attack: $attack_name, model: $model_path, use_last_n_hidden: $use_last_n_hidden"
                     ### Run python
                     ~/anaconda3/envs/adv_env/bin/python3.9 test_attacks.py \
-                    --model-name $model_name \
+                    --model-name $model_path \
                     --dataset $dataset \
                     --subset 1000 \
                     --attack_name cw \

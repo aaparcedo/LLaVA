@@ -11,7 +11,7 @@ import argparse
 import torch.nn.functional as F
 from transformers import AutoTokenizer
 from attacks.generate_adv_samples import generate_one_adv_sample
-from datasets_loader import BaseDataset
+from datasets_loader import CLIPDataset
 from llava.conversation import conv_templates, SeparatorStyle
 from llava.utils import disable_torch_init
 from transformers import CLIPVisionModelWithProjection, CLIPTextModelWithProjection, ResNetForImageClassification, ViTForImageClassification
@@ -43,14 +43,14 @@ def eval_model(args):
     start_time = datetime.datetime.now()
     disable_torch_init()
     print('==> Loading model ...')
-    if  'clip' in args.model_name.lower():
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-        vision_model = CLIPVisionModelWithProjection.from_pretrained(args.model_name, output_hidden_states=True, torch_dtype=torch.float16).cuda().eval()
-        text_model = CLIPTextModelWithProjection.from_pretrained(args.model_name, torch_dtype=torch.float16).cuda().eval()
-    elif 'resnet' in args.model_name.lower():
-        vision_model = ResNetForImageClassification.from_pretrained(args.model_name, output_hidden_states=True, torch_dtype=torch.float16).cuda().eval()
-    elif 'vit' in args.model_name.lower():
-        vision_model = ViTForImageClassification.from_pretrained(args.model_name, output_hidden_states=True, torch_dtype=torch.float16).cuda().eval()
+    if  'clip' in args.model_path.lower():
+        tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+        vision_model = CLIPVisionModelWithProjection.from_pretrained(args.model_path, output_hidden_states=True, torch_dtype=torch.float16).cuda().eval()
+        text_model = CLIPTextModelWithProjection.from_pretrained(args.model_path, torch_dtype=torch.float16).cuda().eval()
+    elif 'resnet' in args.model_path.lower():
+        vision_model = ResNetForImageClassification.from_pretrained(args.model_path, output_hidden_states=True, torch_dtype=torch.float16).cuda().eval()
+    elif 'vit' in args.model_path.lower():
+        vision_model = ViTForImageClassification.from_pretrained(args.model_path, output_hidden_states=True, torch_dtype=torch.float16).cuda().eval()
 
     print('==> Loading dataset ...')
     if args.dataset == 'imagenet':
@@ -58,7 +58,7 @@ def eval_model(args):
             label_list = json.load(f)
         dataset = ImageFolder(root="/datasets/ImageNet2012nonpub/validation", transform=test_tranform)
         dataset = Subset(dataset, random.sample(range(len(dataset)), args.subset))
-        if 'clip' in args.model_name.lower():
+        if 'clip' in args.model_path.lower():
             dataset.label_list = label_list
             text_labels = ["a photo of %s"%v for v in label_list]
             with torch.no_grad():
@@ -69,7 +69,7 @@ def eval_model(args):
             dataset.label_list = label_list
             dataset.text_label_embeds = None
     else:
-        dataset = BaseDataset(args.dataset, model_name=args.model_name, path=None, subset=args.subset)
+        dataset = CLIPDataset(args.dataset, model_path=args.model_path, image_folder=None, subset=args.subset)
     
     dataloader = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=False, pin_memory=True)
     acc1, acc5 = AverageMeter(), AverageMeter()
@@ -91,7 +91,7 @@ def eval_model(args):
 
             images = generate_one_adv_sample(images, 
                 args.attack_name, 
-                args.model_name,
+                args.model_path,
                 vision_model, 
                 text_label_embeds=dataset.text_label_embeds, 
                 use_descriptors=False,
@@ -111,7 +111,7 @@ def eval_model(args):
 
         with torch.no_grad():
 
-            if 'clip' in args.model_name:
+            if 'clip' in args.model_path:
                 if (args.attack_name is not None) or (args.use_last_n_hidden is None) or (args.use_last_n_hidden == 1):
                     image_embeds = vision_model(images).image_embeds
                 else:
@@ -121,7 +121,7 @@ def eval_model(args):
         
                 ## zero-shot result with image
                 logits_per_image = cosine_similarity(text_embeds=dataset.text_label_embeds, image_embeds=image_embeds)
-            elif 'vit' in args.model_name:
+            elif 'vit' in args.model_path:
                 if (args.attack_name is not None) or (args.use_last_n_hidden is None) or (args.use_last_n_hidden == 1):
                     logits_per_image = vision_model(images).logits
                 else:

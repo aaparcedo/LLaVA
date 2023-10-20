@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 import argparse
 from attacks.generate_adv_samples import generate_one_adv_sample
-from datasets_loader import BaseDataset
+from datasets_loader import CLIPDataset, LLAVA2Dataset, get_dataloader
 from llava.utils import disable_torch_init
 from llava.model import *
 import torchvision.transforms as transforms
@@ -32,15 +32,6 @@ descriptor_prompt="Fill in the blank of five templates with single sentence rega
 
 disable_torch_init()
 
-def get_dataloader(model, args):
-        
-    if args.save_image and args.adv_path:
-        os.makedirs(args.adv_path, exist_ok=True)
-    dataset = BaseDataset(dataset=args.dataset, model=model, path=args.adv_path, task=args.task, image_size=args.image_size, subset=args.subset, use_descriptors=args.use_descriptors)
-        
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=12, shuffle=False, pin_memory=True)
-    return dataset, dataloader
-
 def main(model, args):
     print(f"Slurm job ID: {os.environ.get('SLURM_JOB_ID', None)}")
     start_time = datetime.datetime.now()
@@ -54,7 +45,7 @@ def main(model, args):
         images = images.cuda().half()
         labels = labels.cuda()
 
-        if (not args.adv_path or args.adv_path == 'None') and (args.attack_name != 'None'):
+        if (not args.adv_path or args.adv_path == 'None') and (args.attack_name != 'None' or args.attack_name is not None):
             if args.targeted:
                 targeted_labels = torch.cat([get_different_class(c_true, dataset.label_list) for c_true in labels])
             else:
@@ -95,7 +86,7 @@ def main(model, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", type=str, default="['openai/clip-vit-large-patch14']")
+    parser.add_argument("--model-path", type=str, default="['openai/clip-vit-large-patch14']")
     parser.add_argument("--task", type=str, default="classification", choices=["classification", "caption"])
     parser.add_argument("--dataset", type=str, default="['coco']")
     parser.add_argument("--image_size", type=int, default=224)
@@ -104,8 +95,8 @@ if __name__ == "__main__":
     parser.add_argument("--subset", type=int, default=None, help="number of images to test")
     parser.add_argument("--llava_temp", type=float, default=0.1)
     parser.add_argument("--temp", type=float, default=0.1)
-    parser.add_argument("--save_image", type=boolean_string, required=False, default='False')
-    parser.add_argument("--adv_path", type=str, required=False, default=None)
+    parser.add_argument("--save_image", type=boolean_string, required=False, default='False', help='Whether to save generated adversarial images')
+    parser.add_argument("--image_folder", type=str, required=False, default=None)
 
     # args for adv attack
     parser.add_argument("--attack_name", type=str, default="pgd")
@@ -135,21 +126,20 @@ if __name__ == "__main__":
 
     queries = eval(args.query)
     eps = eval(args.eps)
-    model_names = eval(args.model_name)
+    model_paths = eval(args.model_path)
     datasets = eval(args.dataset)
 
     if args.attack_descriptors and not args.use_descriptors:
         raise ValueError("If attack_descriptors is True, use_descriptors must be True")
             
-    for model_name in model_names:
-    # replace with automodel?
+    for model_path in model_paths:
         torch.cuda.empty_cache()
-        args.model_name = model_name
+        args.model_path = model_path
         model = get_model(args)
 
         for ds in datasets:
             args.dataset = ds
-            dataset, dataloader = get_dataloader(model, args)
+            dataset, dataloader = get_dataloader(args, model)
             
             if ds != 'imagenet' and args.use_descriptors:
                 raise ValueError("Only imagenet dataset has descriptors")
@@ -159,7 +149,7 @@ if __name__ == "__main__":
                 for ep in eps:
                     args.eps = ep
 
-                    print("==> Running with args: dataset: {} model_name: {} eps: {} query: {}".format(ds, model_name, ep, query))
+                    print("==> Running with args: dataset: {} model_path: {} eps: {} query: {}".format(ds, model_path, ep, query))
 
                     # post-process args
                     if args.attack_name == 'None':

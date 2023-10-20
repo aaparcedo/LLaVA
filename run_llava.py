@@ -24,7 +24,7 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor, text=None, vqa=F
     if mm_use_im_start_end:
         llava_tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
 
-    if 'v1.5' in args.model_name:
+    if 'v1.5' in args.model_path:
         vision_tower = llava_model.get_vision_tower()
         if not vision_tower.is_loaded:
             vision_tower.load_model()
@@ -102,7 +102,35 @@ def run_LLaVA(args, llava_model, llava_tokenizer, image_tensor, text=None, vqa=F
     return parsed_responses, llava_model.model.image_cls_token
 
 
-    
+def run_llava2(args, model, model_path, image_tensor, tokenizer, input_ids):
+    if 'plain' in model_path and 'finetune' not in model_path.lower() and 'mmtag' not in args.conv_mode:
+        args.conv_mode = args.conv_mode + '_mmtag'
+        print(f'It seems that this is a plain model, but it is not using a mmtag prompt, auto switching to {args.conv_mode}.')
+        
+    stop_str = conv_templates[args.conv_mode].sep if conv_templates[args.conv_mode].sep_style != SeparatorStyle.TWO else conv_templates[args.conv_mode].sep2
+    input_ids = input_ids.to(device='cuda', non_blocking=True)
+
+    with torch.inference_mode():
+        output_ids = model.generate(
+            input_ids,
+            images=image_tensor.to(dtype=torch.float16, device='cuda', non_blocking=True),
+            do_sample=True if args.llava_temp > 0 else False,
+            temperature=args.llava_temp,
+            top_p=args.top_p,
+            num_beams=args.num_beams,
+            max_new_tokens=128,
+            use_cache=True)
+
+    input_token_len = input_ids.shape[1]
+    n_diff_input_output = (input_ids != output_ids[:, :input_token_len]).sum().item()
+    if n_diff_input_output > 0:
+        print(f'[Warning] {n_diff_input_output} output_ids are not the same as the input_ids')
+    outputs = tokenizer.batch_decode(output_ids[:, input_token_len:], skip_special_tokens=True)[0]
+    outputs = outputs.strip()
+    if outputs.endswith(stop_str):
+        outputs = outputs[:-len(stop_str)]
+    outputs = outputs.strip()
+    return outputs
 
 
 if __name__ == '__main__':

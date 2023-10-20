@@ -1,11 +1,11 @@
 from PIL import Image
 from io import BytesIO
 import base64
-
+from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 import torch
 from transformers import StoppingCriteria
 from llava.constants import IMAGE_TOKEN_INDEX
-
+from llava.conversation import conv_templates, SeparatorStyle
 
 def load_image_from_base64(image):
     return Image.open(BytesIO(base64.b64decode(image)))
@@ -60,6 +60,21 @@ def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX
             return torch.tensor(input_ids, dtype=torch.long)
         raise ValueError(f'Unsupported tensor type: {return_tensors}')
     return input_ids
+
+
+def text_to_input_ids(text, model):
+    if model.model.config.mm_use_im_start_end:
+        text = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + '\n' + text
+    else:
+        text = DEFAULT_IMAGE_TOKEN + '\n' + text
+
+    conv = conv_templates[model.args.conv_mode].copy()
+    conv.append_message(conv.roles[0], text)
+    conv.append_message(conv.roles[1], None)
+    text = conv.get_prompt()
+    input_ids = tokenizer_image_token(text, model.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt')
+    return input_ids
+
 
 
 def get_model_name_from_path(model_path):

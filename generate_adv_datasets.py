@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 import argparse
-from datasets_loader import BaseDataset
+from datasets_loader import CLIPDataset
 from models import get_model
 from utils.metric import AverageMeter, accuracy
 from utils.func import make_descriptor_sentence
@@ -18,21 +18,19 @@ from attacks.generate_adv_samples import generate_one_adv_sample
 from llava.model import *
 from torch.utils.data import DataLoader
 from accelerate import Accelerator
+from datasets_loader import get_dataloader
 
 accelerator = Accelerator()
 
-def generate_adversarials_pgd(model, args):
+def generate_adversarials_dataset(model, args):
 
-    dataset = BaseDataset(dataset=args.dataset, model=model, path=args.adv_path, task=args.task, image_size=args.image_size, subset=args.subset)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=2, shuffle=False, pin_memory=True)
+    dataset, dataloader = get_dataloader(args, model)
 
     model, dataloader = accelerator.prepare(model, dataloader)
 
     acc1, acc5 = AverageMeter(), AverageMeter()
     for data in tqdm(dataloader):
         images, base_paths, labels = data
-        # images = images.cuda().half()
-        # labels = labels.cuda()
         images = images.half()
         labels = labels.half()
 
@@ -63,20 +61,23 @@ def generate_adversarials_pgd(model, args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-name", type=str, default="['openai/clip-vit-large-patch14']")
+    parser.add_argument("--image-folder", type=str, required=False, default=None)
+    parser.add_argument("--annotation-file", type=str, required=False, default=None)
+    parser.add_argument("--image_size", type=int, required=False, default=224)
     parser.add_argument("--task", type=str, default="classification", choices=["classification", "caption"])
     parser.add_argument("--dataset", type=str, default="['coco']")
-    parser.add_argument("--image_size", type=int, default=224)
     parser.add_argument("--subset", type=int, default=None, help="number of images to test")
     parser.add_argument("--save_image", type=boolean_string, required=False, default='True')
-    parser.add_argument("--adv_path", type=str, required=False, default=None)
-    parser.add_argument("--batch_size", type=int, required=False, default=None)
+    parser.add_argument("--image_folder", type=str, required=False, default=None, nargs='?')
+    parser.add_argument("--batch_size", type=int, required=False, default=16, nargs='?')
+    parser.add_argument("--num_workers", type=int, required=False, default=4, nargs='?')
 
     # whether to use descriptors for Imagenet label retrieval
     parser.add_argument("--use_descriptors", type=boolean_string, default='False')
     # whether to attack descriptors or attack plain labels and use descriptors to do prediction
     parser.add_argument("--attack_descriptors", type=boolean_string, default='False')
 
-    # args for adv attack
+    ## =============== args for adv attack =================
     parser.add_argument("--attack_name", type=str, default="pgd")
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--nb_iter", type=int, default=30)
@@ -101,12 +102,12 @@ if __name__ == "__main__":
         raise ValueError("If attack_descriptors is True, use_descriptors must be True")
 
     eps = eval(args.eps)
-    model_names = eval(args.model_name)
+    model_paths = eval(args.model_path)
     datasets = eval(args.dataset)
-    for model_name in model_names:
+    for model_path in model_paths:
     # replace with automodel?
         torch.cuda.empty_cache()
-        args.model_name = model_name
+        args.model_path = model_path
         model = get_model(args)
 
         for ds in datasets:
@@ -116,7 +117,7 @@ if __name__ == "__main__":
             for ep in eps:
                 args.eps = ep
 
-                print("==> Generating adversarial datasets with args: dataset: {}, model_name: {}, attack: {}, eps: {}".format(ds, model_name, args.attack_name, ep))
+                print("==> Generating adversarial datasets with args: dataset: {}, model_path: {}, attack: {}, eps: {}".format(ds, model_path, args.attack_name, ep))
                 torch.cuda.empty_cache()
                 args.save_folder = f"/groups/sernam/adv_llava/adv_datasets/{ds}/{SLURM_JOB_ID}_{'clip'+str(args.image_size)}_{args.attack_name}_eps{ep}_nbiter{args.nb_iter}{'_targeted' if args.targeted else ''}{'_attack_descriptors' if args.attack_descriptors else ''}"
                 assert not os.path.exists(args.save_folder), f"Folder {args.save_folder} already exists. It's likely the targeted adversarial dataset is already created."
@@ -154,7 +155,7 @@ if __name__ == "__main__":
                 for k,v in vars(args).items():
                     print(f"{k}: {v}")
 
-                generate_adversarials_pgd(model, args)
+                generate_adversarials_dataset(model, args)
 
                 print("=" * 50)
 

@@ -2,6 +2,7 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
+#SBATCH --gpus-per-node=1
 #SBATCH --constraint=h100
 #SBATCH --time=1:00:00
 #SBATCH --job-name=llava_gen
@@ -34,7 +35,8 @@ rm "./slurm-${SLURM_JOB_ID}.out"
     --model-path "$llavav2" \
     --image-folder "$adv_clip336_image_folder" \
     --question-file "/groups/sernam/datasets/vqa/vqav2/coco2014val_questions_llava.jsonl" \
-    --subset 1000
+    --subset 1000 \
+    --temperature 0
 
 echo "Ending time: $(date)" 
 
