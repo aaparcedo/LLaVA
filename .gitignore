@@ -26,3 +26,5 @@ checkpoints
 ckpts*
 
 *.jpg
+
+playground/*
