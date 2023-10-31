@@ -97,6 +97,7 @@ def fast_gradient_method(
     y=None,
     targeted=False,
     sanity_checks=False,
+    use_ce_loss=True,
 ):
     """
     PyTorch implementation of the Fast Gradient Method.
@@ -137,7 +138,7 @@ def fast_gradient_method(
             )
 
     asserts = []
-
+    
     # If a data range was specified, check that the input was in that range
     if clip_min is not None:
         assert_ge = torch.all(
@@ -158,9 +159,13 @@ def fast_gradient_method(
         # Using model predictions as ground truth to avoid label leaking
         _, y = torch.max(model_fn(x), 1)
 
-    # Compute loss
-    loss_fn = torch.nn.CrossEntropyLoss()
-    loss = loss_fn(model_fn(x), y)
+    if use_ce_loss:
+        # Compute loss
+        loss_fn = torch.nn.CrossEntropyLoss()
+        loss = loss_fn(model_fn(x), y)
+    else:
+        similarity = model_fn(x)[0, y]
+        loss = clip_loss(similarity)
     # If attack is targeted, minimize loss of target label rather than maximize loss of correct label
     if targeted:
         loss = -loss
@@ -199,6 +204,7 @@ def pgd(
     rand_init=True,
     rand_minmax=None,
     sanity_checks=True,
+    use_ce_loss=True,
     **kwargs,
 ):
     """
@@ -312,6 +318,7 @@ def pgd(
             clip_max=clip_max,
             y=y,
             targeted=targeted,
+            use_ce_loss=use_ce_loss
         )
 
         # Clipping perturbation eta to norm norm ball

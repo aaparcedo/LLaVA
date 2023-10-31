@@ -114,8 +114,8 @@ def run_llava2(args, model, model_path, image_tensor, tokenizer, input_ids):
         output_ids = model.generate(
             input_ids,
             images=image_tensor.to(dtype=torch.float16, device='cuda', non_blocking=True),
-            do_sample=True if args.llava_temp > 0 else False,
-            temperature=args.llava_temp,
+            do_sample=True if args.temperature > 0 else False,
+            temperature=args.temperature,
             top_p=args.top_p,
             num_beams=args.num_beams,
             max_new_tokens=128,

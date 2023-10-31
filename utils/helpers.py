@@ -12,3 +12,5 @@ def get_model_name_from_path(model_path):
             return 'llava'
     elif 'blip2' in model_path:
         return 'blip2'
+    elif 'instruct' in model_path:
+        return 'instructblip'

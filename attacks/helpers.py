@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import torch.nn.functional as F
 
 def compute_output_logits(x, vision_model, text_embeddings=None, use_descriptors=False, use_last_n_hidden=None, model_name=None):
     """
@@ -130,3 +131,13 @@ def get_different_class(c_true, classes):
     new_label = classes.index(new_class_idx) 
     new_label = torch.tensor(new_label).unsqueeze(0).cuda()
     return new_label
+
+
+def contrastive_loss(logits, dim):
+    neg_ce = torch.diag(F.log_softmax(logits, dim=dim))
+    return -neg_ce.mean()
+    
+def clip_loss(similarity: torch.Tensor) -> torch.Tensor:
+    caption_loss = contrastive_loss(similarity, dim=0)
+    image_loss = contrastive_loss(similarity, dim=1)
+    return (caption_loss + image_loss) / 2.0
